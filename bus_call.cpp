@@ -79,22 +79,6 @@ gboolean bus_call(GstBus *bus, GstMessage *msg, gpointer data) {
                     gst_element_state_get_name(pending_state));
             break;
         }
-        case GST_MESSAGE_ELEMENT: {
-            const GstStructure *structer = gst_message_get_structure(msg);
-            if (structer == NULL)
-                return TRUE;
-            const gchar *elem_name = gst_structure_get_name(structer);
-            GstObject *src_object = GST_MESSAGE_SRC(msg);
-
-            gchar *src_name = gst_object_get_name(src_object);
-            gchar *struct_str = gst_structure_to_string(structer);
-
-            g_print("Catched MESSAGE_ELEMENT from = %s\n", src_name);
-            g_print("%s\n", struct_str);
-            g_free(src_name);
-            g_free(struct_str);
-            break;
-        }
         default: {
         }
     }
