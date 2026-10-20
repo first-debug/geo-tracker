@@ -6,6 +6,7 @@ net-scale-factor=0.0039215697906911373
 model-color-format=0
 onnx-file=../models/yolo26m.onnx
 model-engine-file=../models/yolo26m_b4_gpu0_fp32.engine
+labelfile-path=../models/labels.txt
 batch-size=4
 network-mode=0
 num-detected-classes=80
@@ -14,16 +15,15 @@ interval=0
 gie-unique-id=1
 process-mode=1
 network-type=0
-cluster-mode=2
+# YOLO26 без NMS: модель сама отдаёт итоговые рамки, кластеризация не нужна
+cluster-mode=4
 maintain-aspect-ratio=1
 symmetric-padding=1
+# ONNX должен быть экспортирован export_yolo26.py из DeepStream-Yolo (выход [batch, N, 6])
 parse-bbox-func-name=NvDsInferParseYoloCuda
 custom-lib-path=/path/to/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so
 engine-create-func-name=NvDsInferYoloCudaEngineGet
 
-[class-attrs-4]
-topk=20
-nms-iou-threshold=0.5
-pre-cluster-threshold=0.4
-eps=0.3
-dbscan-min-score=0.6
+[class-attrs-all]
+pre-cluster-threshold=0.25
+topk=300
