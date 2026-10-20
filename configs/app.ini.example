@@ -23,8 +23,14 @@ enabled=true
 uri-prefix=rtsp://<output-host>:8554/output
 
 [udp]
+# получатель точек; формат датаграмм — proto/points.proto
 host=<receiver-host>
 port=6767
+# точки копятся batch-interval-ms и уходят пачкой; 0 — каждый кадр сразу
+batch-interval-ms=1000
+# предел размера датаграммы, байт: 1400 проходит без IP-фрагментации,
+# больше (до 65507) — меньше датаграмм, но потеря фрагмента губит всю датаграмму
+max-datagram-bytes=1400
 
 [geo]
 # порог RANSAC при расчёте гомографии, в метрах

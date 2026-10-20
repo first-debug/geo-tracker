@@ -96,6 +96,8 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
             !get_string(kf, "output", "uri-prefix", config.output_enabled, config.output_uri_prefix, error) ||
             !get_string(kf, "udp", "host", true, config.udp_host, error) ||
             !get_int(kf, "udp", "port", config.udp_port, error) ||
+            !get_int(kf, "udp", "batch-interval-ms", config.udp_batch_interval_ms, error) ||
+            !get_int(kf, "udp", "max-datagram-bytes", config.udp_max_datagram_bytes, error) ||
             !get_double(kf, "geo", "ransac-threshold-m", config.ransac_threshold_m, error) ||
             !get_double(kf, "geo", "min-aspect-ratio", config.min_aspect_ratio, error) ||
             !get_int(kf, "rtsp", "stall-timeout-sec", config.stall_timeout_sec, error) ||
@@ -109,6 +111,15 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
     }
     if (config.udp_port <= 0 || config.udp_port > 65535) {
         error = "[udp] port must be in 1..65535";
+        return false;
+    }
+    if (config.udp_batch_interval_ms < 0) {
+        error = "[udp] batch-interval-ms must be non-negative";
+        return false;
+    }
+    // 65507 — наибольшая полезная нагрузка UDP по IPv4
+    if (config.udp_max_datagram_bytes < 256 || config.udp_max_datagram_bytes > 65507) {
+        error = "[udp] max-datagram-bytes must be in 256..65507";
         return false;
     }
     if (config.stall_timeout_sec <= 0 || config.reconnect_interval_sec <= 0) {

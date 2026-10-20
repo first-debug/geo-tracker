@@ -9,8 +9,7 @@
 
 #include "probers.hpp"
 #include "message.hpp"
-#include "serializer.hpp"
-#include "udp_connection.hpp"
+#include "points_sender.hpp"
 
 void draw_object_meta(NvOSD_RectParams* bounding_box, NvOSD_TextParams* text_params,
                       const std::string& class_name, int64_t track_id, float confidence);
@@ -142,23 +141,7 @@ static void send_frame_message(pgie_probe_data *prob_data, guint camera_id,
         .future_size = futures_array->len
     };
 
-    uint8_t *data = NULL;
-    size_t len_data = 0;
-
-    if (serialize_message(&msg, &data, &len_data) != 0) {
-        g_printerr("Cannot serialize message.\n");
-        return;
-    }
-
-    ssize_t sent = prob_data->udp_conn->send(data, len_data);
-    if (sent < 0)
-        g_printerr("Failed to send message with length = %zu to server = %s:%d\n",
-                len_data,
-                prob_data->udp_conn->server_ip.data(),
-                prob_data->udp_conn->server_port
-                );
-
-    free(data);
+    prob_data->sender->add_frame(msg);
 }
 
 GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad * pad,
@@ -173,7 +156,7 @@ GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad * pad,
 
     pgie_probe_data *prob_data = static_cast<pgie_probe_data *>(u_data);
 
-    if (prob_data->udp_conn == NULL) {
+    if (prob_data->sender == NULL) {
         return GST_PAD_PROBE_OK;
     }
 

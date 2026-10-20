@@ -36,6 +36,11 @@ struct AppConfig {
 
     std::string udp_host;
     int udp_port = 0;
+    // пакетная отправка: точки копятся udp_batch_interval_ms и уходят пачкой,
+    // 0 — каждый кадр отправляется сразу
+    int udp_batch_interval_ms = 1000;
+    // предел размера датаграммы; 1400 байт проходят без IP-фрагментации
+    int udp_max_datagram_bytes = 1400;
 
     double ransac_threshold_m = 10.0;
     // минимальное отношение ширины bbox к высоте, чтобы объект считался самолётом

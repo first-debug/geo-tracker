@@ -12,6 +12,7 @@
 #include "bus_call.hpp"
 #include "custom_bins.hpp"
 #include "app_config.hpp"
+#include "points_sender.hpp"
 #include "probers.hpp"
 #include "source_manager.hpp"
 #include "udp_connection.hpp"
@@ -91,8 +92,12 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // Объявлен после udp_conn: разрушается раньше и успевает отправить остаток
+    PointsSender sender(udp_conn, config.udp_batch_interval_ms,
+            static_cast<size_t>(config.udp_max_datagram_bytes));
+
     pgie_probe_data probe_data;
-    probe_data.udp_conn = &udp_conn;
+    probe_data.sender = &sender;
     probe_data.min_aspect_ratio = config.min_aspect_ratio;
     probe_data.transformers.reserve(num_sources);
 

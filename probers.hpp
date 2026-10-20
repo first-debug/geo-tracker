@@ -7,10 +7,10 @@
 #include <vector>
 
 #include "pixel_transformer.hpp"
-#include "udp_connection.hpp"
+#include "points_sender.hpp"
 
 struct pgie_probe_data {
-    UdpConnection *udp_conn = nullptr;
+    PointsSender *sender = nullptr;
     // гомография для каждой камеры, индекс — номер входа nvstreammux (pad_index)
     std::vector<PixelGeoTransformer> transformers;
     // минимальное отношение ширины bbox к высоте
