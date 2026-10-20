@@ -11,6 +11,8 @@ struct pgie_probe_data {
     UdpConnection *udp_conn = nullptr;
     // гомография для каждой камеры, индекс — номер входа nvstreammux (pad_index)
     std::vector<PixelGeoTransformer> transformers;
+    // минимальное отношение ширины bbox к высоте
+    double min_aspect_ratio = 1.2;
 };
 
 void set_probe(GstElement* element, const gchar *pad_name, GstPadProbeReturn (*prober) (GstPad * pad,

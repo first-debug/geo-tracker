@@ -5,21 +5,14 @@
 #include <csignal>
 #include <cstdio>
 #include <exception>
-#include <utility>
+#include <string>
 #include <vector>
 
 #include "bus_call.hpp"
 #include "custom_bins.hpp"
+#include "app_config.hpp"
 #include "probers.hpp"
-#include "splited_points.hpp"
 #include "udp_connection.hpp"
-
-// Число камер, для которых есть калибровочные точки (splited_points.cpp)
-static const int CALIBRATED_CAMERAS = 4;
-
-// nvstreammux отправляет пачку, не дожидаясь отставшей или упавшей камеры
-// дольше этого времени (мкс), чтобы остальные камеры продолжали работать.
-static const gint STREAMMUX_BATCHED_PUSH_TIMEOUT_US = 40000;
 
 typedef struct {
     GMainLoop *loop;
@@ -53,19 +46,54 @@ int main(int argc, char *argv[]) {
     guint bus_watch_id;
 
     gst_init(&argc, &argv);
+
+    if (argc != 2) {
+        g_printerr("Usage: %s <path_to_app_config>\n", argv[0]);
+        return -1;
+    }
+
+    AppConfig config;
+    std::string error;
+    if (!load_app_config(argv[1], config, error)) {
+        g_printerr("Cannot load config: %s\n", error.c_str());
+        return -1;
+    }
+
+    const int num_sources = static_cast<int>(config.cameras.size());
+
+    // Калибровку загружаем до сборки конвейера, чтобы ошибка в точках
+    // обнаруживалась сразу, а не после подключения к камерам.
+    UdpConnection udp_conn(config.udp_host, static_cast<uint16_t>(config.udp_port));
+    if (!udp_conn.is_open()) {
+        g_printerr("Cannot open UDP connection to %s:%d.\n", config.udp_host.c_str(), config.udp_port);
+        return -1;
+    }
+
+    pgie_probe_data probe_data;
+    probe_data.udp_conn = &udp_conn;
+    probe_data.min_aspect_ratio = config.min_aspect_ratio;
+    probe_data.transformers.reserve(num_sources);
+
+    for (int cam = 0; cam < num_sources; cam++) {
+        std::vector<cv::Point2d> pixels, geo;
+        if (!load_calibration_points(config.cameras[cam].calibration_file, pixels, geo, error)) {
+            g_printerr("Calibration of camera %d failed: %s\n", cam, error.c_str());
+            return -1;
+        }
+
+        try {
+            probe_data.transformers.emplace_back(pixels, geo, config.ransac_threshold_m);
+        } catch (const std::exception &e) {
+            g_printerr("Calibration of camera %d failed: %s\n", cam, e.what());
+            return -1;
+        }
+
+        const auto &st = probe_data.transformers.back().reprojection_stats();
+        g_print("[CALIB] camera %d: inliers %zu/%zu, reprojection error median %.1f m, p90 %.1f m, max %.1f m\n",
+                cam, st.inliers, st.points, st.median_m, st.p90_m, st.max_m);
+    }
+
     loop = g_main_loop_new(NULL, FALSE);
-
-    if (argc < 4) {
-        g_printerr("Usage: %s <path_to_config_file_nvinfer> <video_output_path> <video_path1> <video_path2> ...\n", argv[0]);
-        return -1;
-    }
-
-    const int num_sources = argc - 3;
-    if (num_sources > CALIBRATED_CAMERAS) {
-        g_printerr("Got %d sources, but calibration exists only for %d cameras.\n",
-                num_sources, CALIBRATED_CAMERAS);
-        return -1;
-    }
 
     // Elements initialization
     pipeline = gst_pipeline_new("sheremetevo");
@@ -73,7 +101,15 @@ int main(int argc, char *argv[]) {
     streammux = gst_element_factory_make("nvstreammux", "stream-muxer");
     pgie = gst_element_factory_make("nvinfer", "primary-infer");
 
-    demux = gst_element_factory_make("nvstreamdemux", "demux");
+    if (config.output_enabled) {
+        demux = gst_element_factory_make("nvstreamdemux", "demux");
+    } else {
+        // Без видеовыхода разметка и кодирование не нужны: кадры уходят в fakesink.
+        demux = gst_element_factory_make("fakesink", "sink");
+        if (demux) {
+            g_object_set(G_OBJECT(demux), "sync", FALSE, "async", FALSE, NULL);
+        }
+    }
 
     if (!pipeline || !streammux || !pgie || !demux) {
         g_printerr("Cannot create some modules.\n");
@@ -82,27 +118,32 @@ int main(int argc, char *argv[]) {
 
     gst_bin_add_many(GST_BIN(pipeline), streammux, pgie, demux, NULL);
 
+    // batched-push-timeout: nvstreammux отправляет пачку, не дожидаясь
+    // отставшей или упавшей камеры, чтобы остальные камеры продолжали работать.
     g_object_set(G_OBJECT(streammux),
             "batch-size", num_sources,
-            "width", 1728,
-            "height", 2752,
-            "batched-push-timeout", STREAMMUX_BATCHED_PUSH_TIMEOUT_US,
+            "width", config.frame_width,
+            "height", config.frame_height,
+            "batched-push-timeout", config.batched_push_timeout_us,
             NULL);
-            // "width", 854,
-            // "height", 480, NULL);
 
-    g_object_set(G_OBJECT(pgie), "config-file-path", argv[1], NULL);
+    g_object_set(G_OBJECT(pgie), "config-file-path", config.nvinfer_config.c_str(), NULL);
 
     gchar buffer[40];
     GstElement *new_bin = NULL;
-    for (int i = 3, index; i < argc; i++) {
-        index = i - 3;
-        new_bin = create_source_bin(argv[i], index);
+    for (int index = 0; index < num_sources; index++) {
+        const CameraConfig &camera = config.cameras[index];
+        SourceTransform transform;
+        transform.flip_method = camera.flip_method;
+        transform.dewarper_config = camera.dewarper_config;
+
+        new_bin = create_source_bin(camera.uri.c_str(), index, transform,
+                config.frame_width, config.frame_height);
 
         // Номер входа связывает камеру с её калибровкой, поэтому пропускать
         // источник нельзя: все следующие камеры получат чужую гомографию.
         if (new_bin == NULL) {
-            g_printerr("Cannot create rtsp source bin for uri = %s\n", argv[i]);
+            g_printerr("Cannot create rtsp source bin for uri = %s\n", camera.uri.c_str());
             return -1;
         }
 
@@ -123,25 +164,19 @@ int main(int argc, char *argv[]) {
         gst_object_unref(sink_pad);
     }
 
-    if (streammux->numsinkpads == 0) {
-        g_printerr("Couldn't create at least one source.\n");
-        return -1;
-    }
-
     if (!gst_element_link_many(streammux, pgie, demux, NULL)) {
         g_printerr("Cannot link elements.\n");
         return -1;
     }
 
-    for (int i = 3, index; i < argc; i++) {
-        index = i - 3;
-        snprintf(buffer, 39, "%s_%1d", argv[2], index);
-        new_bin = create_sink_bin(buffer, index);
+    for (int index = 0; config.output_enabled && index < num_sources; index++) {
+        std::string output_uri = config.output_uri_prefix + "_" + std::to_string(index);
+        new_bin = create_sink_bin(output_uri.c_str(), index);
         snprintf(buffer, 39, "nvosd_%1d", index);
         nvosd = gst_element_factory_make("nvdsosd", buffer);
 
         if (new_bin == NULL || nvosd == NULL) {
-            g_printerr("Cannot create rtsp sink bin or nvdsosd for stream %d\n", index);
+            g_printerr("Cannot create rtsp sink bin or nvdsosd for uri = %s\n", output_uri.c_str());
             return -1;
         }
 
@@ -169,44 +204,6 @@ int main(int argc, char *argv[]) {
 
         gst_object_unref(src_pad);
         gst_object_unref(sink_pad);
-    }
-
-    if (demux->numsrcpads == 0) {
-        g_printerr("Couldn't create at least one sink.\n");
-        return -1;
-    }
-
-    UdpConnection udp_conn("192.168.10.185", 6767);
-    if (!udp_conn.is_open()) {
-        g_printerr("Cannot open UDP connection.\n");
-        return -1;
-    }
-
-    points_struct points;
-    init_points(points);
-
-    const std::vector<std::pair<const std::vector<cv::Point2d> *, const std::vector<cv::Point2d> *>> calibration = {
-        { &points.pixels_cam1, &points.geo_cam1 },
-        { &points.pixels_cam2, &points.geo_cam2 },
-        { &points.pixels_cam3, &points.geo_cam3 },
-        { &points.pixels_cam4, &points.geo_cam4 },
-    };
-
-    pgie_probe_data probe_data;
-    probe_data.udp_conn = &udp_conn;
-    probe_data.transformers.reserve(num_sources);
-
-    for (int cam = 0; cam < num_sources; cam++) {
-        try {
-            probe_data.transformers.emplace_back(*calibration[cam].first, *calibration[cam].second);
-        } catch (const std::exception &e) {
-            g_printerr("Calibration of camera %d failed: %s\n", cam, e.what());
-            return -1;
-        }
-
-        const auto &st = probe_data.transformers.back().reprojection_stats();
-        g_print("[CALIB] camera %d: inliers %zu/%zu, reprojection error median %.1f m, p90 %.1f m, max %.1f m\n",
-                cam, st.inliers, st.points, st.median_m, st.p90_m, st.max_m);
     }
 
     set_probe(pgie, "src", pgie_src_pad_buffer_probe, &probe_data);

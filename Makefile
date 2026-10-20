@@ -40,17 +40,10 @@ run: all
 	$(MAKE) run-multi-src
 
 run-single-src: $(TARGET)
-	$(TARGET) $(CONFIGS_DIR)/config_infer_primary_yolo.txt \
-		rtspt://192.168.0.181:8554/output \
-		rtspt://192.168.0.181:8554/svo1
+	$(TARGET) $(CONFIGS_DIR)/app.ini
 
 run-multi-src: $(TARGET)
-	$(TARGET) $(CONFIGS_DIR)/config_infer_primary_yolo.txt \
-		rtspt://192.168.0.181:8554/output \
-		rtspt://192.168.0.181:8554/svo1 \
-		rtspt://192.168.0.181:8554/svo2 \
-		rtspt://192.168.0.181:8554/svo3 \
-		rtspt://192.168.0.181:8554/svo4
+	$(TARGET) $(CONFIGS_DIR)/app.ini
 
 $(BUILD_DIR):
 	mkdir -p $@

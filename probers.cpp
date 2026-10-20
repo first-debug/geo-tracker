@@ -202,7 +202,7 @@ GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad * pad,
 
             // проверка размера bbox'а
             if (obj_meta->rect_params.height == 0 ||
-                    obj_meta->rect_params.width / obj_meta->rect_params.height <= 1.2) {
+                    obj_meta->rect_params.width / obj_meta->rect_params.height <= prob_data->min_aspect_ratio) {
                 continue;
             }
 
