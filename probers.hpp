@@ -2,12 +2,15 @@
 #define PROBERS_H
 
 #include "gst/gstpad.h"
+#include <vector>
+
 #include "pixel_transformer.hpp"
 #include "udp_connection.hpp"
 
 struct pgie_probe_data {
     UdpConnection *udp_conn = nullptr;
-    PixelGeoTransformer transformers[4];
+    // гомография для каждой камеры, индекс — номер входа nvstreammux (pad_index)
+    std::vector<PixelGeoTransformer> transformers;
 };
 
 void set_probe(GstElement* element, const gchar *pad_name, GstPadProbeReturn (*prober) (GstPad * pad,

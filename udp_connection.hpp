@@ -9,8 +9,8 @@
 
 class UdpConnection {
 private:
-    int                sockfd;
-    struct sockaddr_in server_addr;
+    int                sockfd = -1;
+    struct sockaddr_in server_addr {};
 
 public:
     std::string              server_ip;
@@ -18,6 +18,10 @@ public:
 
     UdpConnection(std::string server_ip, uint16_t server_port);
     ssize_t send(const uint8_t *data, size_t len);
+    bool is_open() const { return sockfd >= 0; }
+
+    UdpConnection(const UdpConnection &) = delete;
+    UdpConnection &operator=(const UdpConnection &) = delete;
 
     ~UdpConnection();
 };

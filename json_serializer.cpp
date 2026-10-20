@@ -66,7 +66,7 @@ int serialize_message(const points_message_t *msg,
         json_object_put(message);
         return -1;
     }
-    for (int i = 0; i < msg->future_size; i++)
+    for (size_t i = 0; i < msg->future_size; i++)
         json_object_array_add(future_array, future_to_json(&msg->future[i]));
 
     json_object_object_add(message, "camera_id", json_object_new_int(msg->camera_id));

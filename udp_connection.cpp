@@ -1,17 +1,20 @@
-#include <assert.h>
+#include <cerrno>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <iostream>
+#include <system_error>
 
 #include "udp_connection.hpp"
 
 UdpConnection::UdpConnection(std::string server_ip, uint16_t server_port)
     : server_ip(server_ip), server_port(server_port) {
-    assert(!server_ip.empty());
-    assert(server_port >= 1024);
+    if (server_ip.empty() || server_port == 0) {
+        std::cerr << "udp_connection_init: invalid server address" << std::endl;
+        return;
+    }
 
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) {
@@ -59,7 +62,7 @@ ssize_t UdpConnection::send(const uint8_t *data, size_t len) {
         return -1;
     }
 
-    if (sent_size != len) {
+    if (static_cast<size_t>(sent_size) != len) {
         std::cerr
             << "udp_send: partial send (" << sent_size << " of " << len << "bytes)"
             << std::endl;

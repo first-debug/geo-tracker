@@ -17,10 +17,9 @@ PKGS:= gstreamer-1.0 opencv4
 
 BUILD_OBJS:= $(addprefix $(BUILD_DIR)/, $(OBJS))
 
-CFLAGS+= $(shell pkg-config --cflags $(PKGS)) \
+CFLAGS+= -std=gnu++17 -O2 -g -Wall -Wextra \
+		 $(shell pkg-config --cflags $(PKGS)) \
 		 -I/opt/nvidia/deepstream/deepstream/sources/includes \
-		 -L/opt/nvidia/deepstream/deepstream/lib -lnvdsgst_meta -lnvds_meta \
-		 -L$(BUILD_DIR) \
 		 -I/usr/include/opencv4
 
 LIBS:= $(shell pkg-config --libs $(PKGS)) \
@@ -42,16 +41,16 @@ run: all
 
 run-single-src: $(TARGET)
 	$(TARGET) $(CONFIGS_DIR)/config_infer_primary_yolo.txt \
-		rtspt://192.168.10.185:8554/output \
-		rtspt://192.168.10.185:8554/svo1
+		rtspt://192.168.0.181:8554/output \
+		rtspt://192.168.0.181:8554/svo1
 
 run-multi-src: $(TARGET)
 	$(TARGET) $(CONFIGS_DIR)/config_infer_primary_yolo.txt \
-		rtspt://192.168.10.185:8554/output \
-		rtspt://192.168.10.185:8554/svo1 \
-		rtspt://192.168.10.185:8554/svo2 \
-		rtspt://192.168.10.185:8554/svo3 \
-		rtspt://192.168.10.185:8554/svo4
+		rtspt://192.168.0.181:8554/output \
+		rtspt://192.168.0.181:8554/svo1 \
+		rtspt://192.168.0.181:8554/svo2 \
+		rtspt://192.168.0.181:8554/svo3 \
+		rtspt://192.168.0.181:8554/svo4
 
 $(BUILD_DIR):
 	mkdir -p $@

@@ -1,8 +1,8 @@
 #include "glib.h"
-#include <assert.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <sys/types.h>
+#include <time.h>
 
 #include "gstnvdsmeta.h"
 #include "nvdsmeta.h"
@@ -120,105 +120,126 @@ GstPadProbeReturn print_nvmeta_probe(GstPad * pad,
     return GST_PAD_PROBE_OK;
 }
 
+// Время кадра в секундах Unix-эпохи. nvstreammux проставляет ntp_timestamp
+// (по умолчанию — системное время прихода кадра, с attach-sys-ts=TRUE);
+// если его нет, берём текущее время.
+static gdouble frame_timestamp_sec(const NvDsFrameMeta *frame_meta) {
+    if (frame_meta->ntp_timestamp != 0) {
+        return frame_meta->ntp_timestamp / 1e9;
+    }
+
+    struct timespec current_time;
+    clock_gettime(CLOCK_REALTIME, &current_time);
+    return current_time.tv_sec + current_time.tv_nsec / 1e9;
+}
+
+static void send_frame_message(pgie_probe_data *prob_data, guint camera_id,
+        gdouble timestamp, GArray *futures_array) {
+    points_message_t msg = {
+        .camera_id = static_cast<int>(camera_id),
+        .timestamp = timestamp,
+        .future = (future_t *)futures_array->data,
+        .future_size = futures_array->len
+    };
+
+    uint8_t *data = NULL;
+    size_t len_data = 0;
+
+    if (serialize_message(&msg, &data, &len_data) != 0) {
+        g_printerr("Cannot serialize message.\n");
+        return;
+    }
+
+    ssize_t sent = prob_data->udp_conn->send(data, len_data);
+    if (sent < 0)
+        g_printerr("Failed to send message with length = %zu to server = %s:%d\n",
+                len_data,
+                prob_data->udp_conn->server_ip.data(),
+                prob_data->udp_conn->server_port
+                );
+
+    free(data);
+}
+
 GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad * pad,
         GstPadProbeInfo * info,
         gpointer u_data) {
     GstBuffer *buf = (GstBuffer *) info->data;
     NvDsBatchMeta *batch_meta = gst_buffer_get_nvds_batch_meta (buf);
 
-    if (!batch_meta) {
+    if (!batch_meta || u_data == NULL) {
         return GST_PAD_PROBE_OK;
     }
 
-    assert(u_data != NULL);
-
     pgie_probe_data *prob_data = static_cast<pgie_probe_data *>(u_data);
 
-    assert(prob_data->udp_conn != NULL);
+    if (prob_data->udp_conn == NULL) {
+        return GST_PAD_PROBE_OK;
+    }
 
     GArray *new_futures_array = g_array_new(FALSE, FALSE, sizeof(future_t));
 
     NvDsFrameMetaList *frame_meta_list = batch_meta->frame_meta_list;
 
-    for (guint frame_idx = 0; frame_meta_list != NULL; frame_idx++) {
+    for (; frame_meta_list != NULL; frame_meta_list = frame_meta_list->next) {
         NvDsFrameMeta *frame_meta = (NvDsFrameMeta *)frame_meta_list->data;
         guint stream_id = frame_meta->pad_index;
 
+        if (stream_id >= prob_data->transformers.size()) {
+            g_printerr("[PROBE] No calibration for stream %u, frame skipped.\n", stream_id);
+            continue;
+        }
+
+        const PixelGeoTransformer &transformer = prob_data->transformers[stream_id];
+
+        g_array_set_size(new_futures_array, 0);
         NvDsDisplayMeta* current_display_meta = nullptr;
 
         NvDsObjectMetaList *obj_meta_list = frame_meta->obj_meta_list;
-        guint obj_count = 0;
 
-        for (; obj_meta_list != NULL; obj_count++) {
+        for (; obj_meta_list != NULL; obj_meta_list = obj_meta_list->next) {
             NvDsObjectMeta *obj_meta = (NvDsObjectMeta *) obj_meta_list->data;
 
             // проверка размера bbox'а
-            if (obj_meta->rect_params.height != 0 &&
-                    obj_meta->rect_params.width / obj_meta->rect_params.height > 1.2) {
-
-                gint x = (gint) (obj_meta->rect_params.left +
-                        obj_meta->rect_params.width / 2);
-                gint y = (gint) (obj_meta->rect_params.top +
-                        obj_meta->rect_params.height);
-
-                // get a geo point in format (lng, lat)
-                std::pair geo_coords = prob_data->transformers[frame_meta->pad_index].pixel_to_geo(x, y);
-
-                future_t future = {
-                    .lat = geo_coords.second,
-                    .lng = geo_coords.first,
-                    .object_id = static_cast<int>(obj_meta->object_id),
-                    .name = "самолёт",
-                    .confidence = obj_meta->confidence,
-                    .bbox = {
-                        .x1 = static_cast<int>(obj_meta->rect_params.left),
-                        .y1 = static_cast<int>(obj_meta->rect_params.top),
-                        .x2 = static_cast<int>(obj_meta->rect_params.left + obj_meta->rect_params.width),
-                        .y2 = static_cast<int>(obj_meta->rect_params.top + obj_meta->rect_params.height)
-                    }
-                };
-                g_array_append_vals(new_futures_array, &future, 1);
-
-                draw_object_meta(&obj_meta->rect_params, &obj_meta->text_params,
-                        future.name, future.object_id, future.confidence);
-
-                draw_point_with_latlng(batch_meta, frame_meta, current_display_meta,
-                        obj_meta->rect_params, future.lat, future.lng);
+            if (obj_meta->rect_params.height == 0 ||
+                    obj_meta->rect_params.width / obj_meta->rect_params.height <= 1.2) {
+                continue;
             }
 
-            obj_meta_list = obj_meta_list->next;
+            gdouble x = obj_meta->rect_params.left + obj_meta->rect_params.width / 2;
+            gdouble y = obj_meta->rect_params.top + obj_meta->rect_params.height;
+
+            // get a geo point in format (lng, lat)
+            auto geo_coords = transformer.pixel_to_geo(x, y);
+            if (!geo_coords) {
+                continue;
+            }
+
+            future_t future = {
+                .lat = geo_coords->second,
+                .lng = geo_coords->first,
+                .object_id = static_cast<int>(obj_meta->object_id),
+                .name = "самолёт",
+                .confidence = obj_meta->confidence,
+                .bbox = {
+                    .x1 = static_cast<int>(obj_meta->rect_params.left),
+                    .y1 = static_cast<int>(obj_meta->rect_params.top),
+                    .x2 = static_cast<int>(obj_meta->rect_params.left + obj_meta->rect_params.width),
+                    .y2 = static_cast<int>(obj_meta->rect_params.top + obj_meta->rect_params.height)
+                }
+            };
+            g_array_append_vals(new_futures_array, &future, 1);
+
+            draw_object_meta(&obj_meta->rect_params, &obj_meta->text_params,
+                    future.name, future.object_id, future.confidence);
+
+            draw_point_with_latlng(batch_meta, frame_meta, current_display_meta,
+                    obj_meta->rect_params, future.lat, future.lng);
         }
 
-        NvDisplayMetaList *display_meta_list = frame_meta->display_meta_list;
-
-        frame_meta_list = frame_meta_list->next;
-    }
-
-    struct timespec current_time;
-    clock_gettime(CLOCK_REALTIME, &current_time);
-    gdouble time_sec = current_time.tv_sec + current_time.tv_nsec;
-
-    points_message_t msg = {
-        .camera_id = 0,
-        .timestamp = time_sec,
-        .future = (future_t *)new_futures_array->data,
-        .future_size = new_futures_array->len
-    };
-
-    uint8_t *data = NULL;
-    size_t len_data;
-
-    if (serialize_message(&msg, &data, &len_data) != 0) {
-        g_print("Cannot serialize message.\n");
-    } else {
-        ssize_t sent = prob_data->udp_conn->send(data, len_data);
-
-        if (sent < 0)
-            g_print("Failed to send message with length = %ld to server = %s:%d\n",
-                    len_data,
-                    prob_data->udp_conn->server_ip.data(),
-                    prob_data->udp_conn->server_port
-                    );
+        // одно сообщение на кадр, чтобы получатель знал, с какой камеры объекты
+        send_frame_message(prob_data, stream_id, frame_timestamp_sec(frame_meta),
+                new_futures_array);
     }
 
     g_array_free(new_futures_array, TRUE);
@@ -242,15 +263,18 @@ void draw_object_meta(NvOSD_RectParams* bounding_box, NvOSD_TextParams* text_par
     char buffer[128];
     snprintf(buffer, sizeof(buffer), "%d %s %.2f", track_id, class_name.c_str(), confidence);
 
-    // Выделение памяти под строку (в DeepStream ожидается char*)
-    text_params->display_text = strdup(buffer);
+    // Выделение памяти под строку (DeepStream освобождает её через g_free).
+    // Старый текст, если его уже проставил nvinfer, освобождаем, чтобы не текла память.
+    g_free(text_params->display_text);
+    text_params->display_text = g_strdup(buffer);
 
     // Позиционирование текста
     text_params->x_offset = std::max(0, static_cast<int>(bounding_box->left));
     text_params->y_offset = std::max(0, static_cast<int>(bounding_box->top) - 30);
 
     // Настройка шрифта
-    text_params->font_params.font_name = strdup("Serif");
+    // Имя шрифта DeepStream не освобождает, поэтому строковый литерал, а не копия
+    text_params->font_params.font_name = (gchar *)"Serif";
     text_params->font_params.font_size = 16;
 
     text_params->font_params.font_color.red   = 1.0;
@@ -289,12 +313,12 @@ void draw_point_with_latlng(NvDsBatchMeta* batch_meta, NvDsFrameMeta* frame_meta
     char buffer[128];
     snprintf(buffer, sizeof(buffer), "lat: %.4f lng: %.4f", lat, lng);
 
-    label->display_text = strdup(buffer);
+    label->display_text = g_strdup(buffer);
 
     label->x_offset = std::max(0, x);
     label->y_offset = std::max(0, y - 15);
 
-    label->font_params.font_name = strdup("Arial");
+    label->font_params.font_name = (gchar *)"Arial";
     label->font_params.font_size = 12;
     label->font_params.font_color = {1.0, 1.0, 0.0, 1.0};
 
