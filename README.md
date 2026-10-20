@@ -23,6 +23,6 @@ make
 ./build/sheremetevo-app configs/app.ini
 ```
 
-Все настройки — в [configs/app.ini](configs/app.ini): камеры, получатель UDP, видеовыход, пороги.
+Все настройки — в `configs/app.ini` (шаблон — [configs/app.ini.example](configs/app.ini.example)): камеры, получатель UDP, видеовыход, трекер, пороги.
 Точки калибровки каждой камеры лежат в `configs/calibration/cameraN.csv` (`pixel_x,pixel_y,lng,lat`).
 При старте программа печатает ошибку репроекции калибровки по каждой камере.

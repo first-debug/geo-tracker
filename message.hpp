@@ -2,6 +2,7 @@
 #define MESSAGE_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 typedef struct {
     int x1;
@@ -13,7 +14,8 @@ typedef struct {
 typedef struct {
     double      lat;
     double      lng;
-    int         object_id;
+    // id трека от nvtracker, -1 — объект не отслеживается
+    int64_t     object_id;
     const char *name;
     double      confidence;
     bbox_t      bbox;

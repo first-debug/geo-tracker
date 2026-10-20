@@ -3,6 +3,7 @@
 #include "gst/gstelement.h"
 #include <glib-unix.h>
 #include <csignal>
+#include <unistd.h>
 #include <cstdio>
 #include <exception>
 #include <string>
@@ -20,14 +21,27 @@ typedef struct {
     gboolean eos_sent;
 } SignalData;
 
+// Сколько ждать прохождения EOS по конвейеру и перехода в NULL, секунд
+static const guint EOS_TIMEOUT_SEC = 3;
+static const guint SHUTDOWN_TIMEOUT_SEC = 10;
+
+static gboolean on_eos_timeout(gpointer user_data) {
+    SignalData *data = (SignalData *)user_data;
+    g_printerr("EOS did not reach the sinks in %u s, stopping anyway.\n", EOS_TIMEOUT_SEC);
+    g_main_loop_quit(data->loop);
+    return G_SOURCE_REMOVE;
+}
+
 // Первый SIGINT/SIGTERM — отправить EOS, чтобы корректно закрыть энкодеры и
-// RTSP-сессии; второй — выйти сразу.
+// RTSP-сессии; если EOS не дойдёт за EOS_TIMEOUT_SEC (конвейер завис), выходим
+// всё равно. Второй сигнал — выйти сразу.
 static gboolean on_terminate_signal(gpointer user_data) {
     SignalData *data = (SignalData *)user_data;
     if (!data->eos_sent) {
         g_print("\nStopping pipeline (send the signal again to force quit)...\n");
         data->eos_sent = TRUE;
         gst_element_send_event(data->pipeline, gst_event_new_eos());
+        g_timeout_add_seconds(EOS_TIMEOUT_SEC, on_eos_timeout, data);
     } else {
         g_main_loop_quit(data->loop);
     }
@@ -40,12 +54,17 @@ int main(int argc, char *argv[]) {
                *streammux = NULL,
                *pgie = NULL,
                *nvosd = NULL,
+               *tracker = NULL,
                *demux = NULL;
     GstPad *src_pad = NULL, *sink_pad = NULL;
     GstBus *bus = NULL;
     guint bus_watch_id;
 
     gst_init(&argc, &argv);
+
+    // Построчная буферизация stdout: иначе при выводе в файл или через tee
+    // строки g_print (статистика, сообщения об остановке) теряются при падении.
+    setvbuf(stdout, NULL, _IOLBF, 0);
 
     if (argc != 2) {
         g_printerr("Usage: %s <path_to_app_config>\n", argv[0]);
@@ -118,6 +137,24 @@ int main(int argc, char *argv[]) {
 
     gst_bin_add_many(GST_BIN(pipeline), streammux, pgie, demux, NULL);
 
+    if (config.tracker_enabled) {
+        tracker = gst_element_factory_make("nvtracker", "tracker");
+        if (!tracker) {
+            g_printerr("Cannot create nvtracker.\n");
+            return -1;
+        }
+        g_object_set(G_OBJECT(tracker),
+                "ll-lib-file", config.tracker_lib.c_str(),
+                "ll-config-file", config.tracker_config.c_str(),
+                "tracker-width", config.tracker_width,
+                "tracker-height", config.tracker_height,
+                NULL);
+        gst_bin_add(GST_BIN(pipeline), tracker);
+    }
+
+    // Последний элемент анализа: после него метаданные объектов уже окончательные
+    GstElement *analytics_tail = tracker ? tracker : pgie;
+
     // batched-push-timeout: nvstreammux отправляет пачку, не дожидаясь
     // отставшей или упавшей камеры, чтобы остальные камеры продолжали работать.
     g_object_set(G_OBJECT(streammux),
@@ -164,7 +201,9 @@ int main(int argc, char *argv[]) {
         gst_object_unref(sink_pad);
     }
 
-    if (!gst_element_link_many(streammux, pgie, demux, NULL)) {
+    if (!gst_element_link(streammux, pgie) ||
+            (tracker && !gst_element_link(pgie, tracker)) ||
+            !gst_element_link(analytics_tail, demux)) {
         g_printerr("Cannot link elements.\n");
         return -1;
     }
@@ -175,19 +214,37 @@ int main(int argc, char *argv[]) {
         snprintf(buffer, 39, "nvosd_%1d", index);
         nvosd = gst_element_factory_make("nvdsosd", buffer);
 
-        if (new_bin == NULL || nvosd == NULL) {
-            g_printerr("Cannot create rtsp sink bin or nvdsosd for uri = %s\n", output_uri.c_str());
+        // Видеовыход отвязан от анализа очередью, которая выбрасывает старые
+        // кадры: если RTSP-сервер не принимает поток или тормозит, детекция и
+        // отправка координат продолжают работать.
+        snprintf(buffer, 39, "output_queue_%1d", index);
+        GstElement *output_queue = gst_element_factory_make("queue", buffer);
+
+        if (new_bin == NULL || nvosd == NULL || output_queue == NULL) {
+            g_printerr("Cannot create rtsp sink bin, queue or nvdsosd for uri = %s\n", output_uri.c_str());
             return -1;
         }
 
-        gst_bin_add_many(GST_BIN(pipeline), nvosd, new_bin, NULL);
+        g_object_set(G_OBJECT(output_queue),
+                "leaky", 2,  // downstream: выбрасывать самые старые кадры
+                "max-size-buffers", 4,
+                "max-size-bytes", 0,
+                "max-size-time", (guint64)0,
+                NULL);
+
+        gst_bin_add_many(GST_BIN(pipeline), output_queue, nvosd, new_bin, NULL);
+
+        if (!gst_element_link(output_queue, nvosd)) {
+            g_printerr("Cannot link output queue and nvosd.\n");
+            return -1;
+        }
 
         snprintf(buffer, 17, "src_%1d", index);
         src_pad = gst_element_request_pad_simple(demux, buffer);
-        sink_pad = gst_element_get_static_pad(nvosd, "sink");
+        sink_pad = gst_element_get_static_pad(output_queue, "sink");
 
         if (gst_pad_link(src_pad, sink_pad) != GST_PAD_LINK_OK) {
-            g_printerr("Cannot link demux and nvosd.\n");
+            g_printerr("Cannot link demux and output queue.\n");
             gst_object_unref(src_pad);
             gst_object_unref(sink_pad);
             gst_bin_remove_many(GST_BIN(pipeline), nvosd, new_bin, NULL);
@@ -206,7 +263,8 @@ int main(int argc, char *argv[]) {
         gst_object_unref(sink_pad);
     }
 
-    set_probe(pgie, "src", pgie_src_pad_buffer_probe, &probe_data);
+    // Проба стоит после трекера, чтобы в сообщения попадали его object_id
+    set_probe(analytics_tail, "src", pgie_src_pad_buffer_probe, &probe_data);
 
     GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "sheremetevo");
     bus = gst_pipeline_get_bus(GST_PIPELINE(pipeline));
@@ -218,15 +276,25 @@ int main(int argc, char *argv[]) {
     guint sigint_id = g_unix_signal_add(SIGINT, on_terminate_signal, &signal_data);
     guint sigterm_id = g_unix_signal_add(SIGTERM, on_terminate_signal, &signal_data);
 
+    probe_data.init_stats(num_sources);
+    g_timeout_add_seconds(5, print_stream_stats, &probe_data);
+
     g_print("\nStarting pipline...\n");
     gst_element_set_state(pipeline, GST_STATE_PLAYING);
     g_main_loop_run(loop);
 
-    g_print("Stopping pipeline...\n");
-    gst_element_set_state(pipeline, GST_STATE_NULL);
-
+    // Обработчики сигналов GLib работают только внутри главного цикла, а он уже
+    // остановлен. Возвращаем стандартное поведение, чтобы Ctrl+C убивал процесс,
+    // если какой-то элемент завис при остановке, и страхуемся таймером.
     g_source_remove(sigint_id);
     g_source_remove(sigterm_id);
+    signal(SIGINT, SIG_DFL);
+    signal(SIGTERM, SIG_DFL);
+    alarm(SHUTDOWN_TIMEOUT_SEC);
+
+    g_print("Stopping pipeline...\n");
+    gst_element_set_state(pipeline, GST_STATE_NULL);
+    alarm(0);
 
     gst_object_unref(GST_OBJECT(pipeline));
     g_source_remove(bus_watch_id);

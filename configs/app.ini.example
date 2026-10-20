@@ -26,6 +26,18 @@ ransac-threshold-m=10
 # минимальное отношение ширины bbox к высоте
 min-aspect-ratio=1.2
 
+[tracker]
+# true — добавить nvtracker: у объектов появится постоянный object_id;
+# false или нет секции — трекера нет, object_id = -1
+enabled=true
+ll-lib-file=/opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so
+# готовые конфиги из DeepStream: config_tracker_IOU.yml (самый быстрый),
+# config_tracker_NvSORT.yml, config_tracker_NvDCF_perf.yml (устойчив к перекрытиям)
+ll-config-file=/opt/nvidia/deepstream/deepstream/samples/configs/deepstream-app/config_tracker_NvDCF_perf.yml
+# размер кадра для трекера, кратно 32
+width=960
+height=544
+
 # Камеры: номер группы — camera_id в UDP-сообщениях, номера подряд с 0.
 #   uri             — адрес RTSP-потока (обязательно)
 #   calibration     — CSV с точками pixel_x,pixel_y,lng,lat (обязательно)

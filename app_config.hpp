@@ -38,6 +38,14 @@ struct AppConfig {
 
     // порядок камер задаёт camera_id: [camera0], [camera1], ...
     std::vector<CameraConfig> cameras;
+
+    // Трекер (nvtracker). Если секции [tracker] нет или enabled=false,
+    // трекер в конвейер не добавляется и object_id в сообщениях равен -1.
+    bool tracker_enabled = false;
+    std::string tracker_lib;     // ll-lib-file
+    std::string tracker_config;  // ll-config-file
+    int tracker_width = 960;     // кратно 32
+    int tracker_height = 544;    // кратно 32
 };
 
 /*

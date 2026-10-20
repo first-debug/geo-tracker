@@ -2,6 +2,8 @@
 #define PROBERS_H
 
 #include "gst/gstpad.h"
+#include <atomic>
+#include <memory>
 #include <vector>
 
 #include "pixel_transformer.hpp"
@@ -13,7 +15,23 @@ struct pgie_probe_data {
     std::vector<PixelGeoTransformer> transformers;
     // минимальное отношение ширины bbox к высоте
     double min_aspect_ratio = 1.2;
+
+    // Счётчики для периодической статистики, по одному на камеру.
+    // Пишутся из потока конвейера, читаются и обнуляются таймером в главном цикле.
+    size_t num_streams = 0;
+    std::unique_ptr<std::atomic<guint64>[]> frames;
+    std::unique_ptr<std::atomic<guint64>[]> objects;
+
+    void init_stats(size_t streams) {
+        num_streams = streams;
+        frames.reset(new std::atomic<guint64>[streams]());
+        objects.reset(new std::atomic<guint64>[streams]());
+    }
 };
+
+// Печатает fps и число объектов по каждой камере за прошедший интервал.
+// Предназначена для g_timeout_add_seconds, user_data — pgie_probe_data.
+gboolean print_stream_stats(gpointer user_data);
 
 void set_probe(GstElement* element, const gchar *pad_name, GstPadProbeReturn (*prober) (GstPad * pad,
         GstPadProbeInfo * info,

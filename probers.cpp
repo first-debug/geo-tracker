@@ -13,7 +13,7 @@
 #include "udp_connection.hpp"
 
 void draw_object_meta(NvOSD_RectParams* bounding_box, NvOSD_TextParams* text_params,
-                      const std::string& class_name, int track_id, float confidence);
+                      const std::string& class_name, int64_t track_id, float confidence);
 void draw_point_with_latlng(NvDsBatchMeta* batch_meta, NvDsFrameMeta* frame_meta,
                              NvDsDisplayMeta*& display_meta,
                              const NvOSD_RectParams& bbox, double lat, double lng);
@@ -192,6 +192,11 @@ GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad * pad,
 
         const PixelGeoTransformer &transformer = prob_data->transformers[stream_id];
 
+        if (stream_id < prob_data->num_streams) {
+            prob_data->frames[stream_id]++;
+            prob_data->objects[stream_id] += frame_meta->num_obj_meta;
+        }
+
         g_array_set_size(new_futures_array, 0);
         NvDsDisplayMeta* current_display_meta = nullptr;
 
@@ -218,7 +223,8 @@ GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad * pad,
             future_t future = {
                 .lat = geo_coords->second,
                 .lng = geo_coords->first,
-                .object_id = static_cast<int>(obj_meta->object_id),
+                .object_id = obj_meta->object_id == UNTRACKED_OBJECT_ID
+                    ? -1 : static_cast<int64_t>(obj_meta->object_id),
                 .name = "самолёт",
                 .confidence = obj_meta->confidence,
                 .bbox = {
@@ -247,8 +253,31 @@ GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad * pad,
     return GST_PAD_PROBE_OK;
 }
 
+gboolean print_stream_stats(gpointer user_data) {
+    pgie_probe_data *prob_data = static_cast<pgie_probe_data *>(user_data);
+
+    static gint64 last_time = g_get_monotonic_time();
+    gint64 now = g_get_monotonic_time();
+    double seconds = (now - last_time) / 1e6;
+    last_time = now;
+
+    if (seconds <= 0) {
+        return G_SOURCE_CONTINUE;
+    }
+
+    for (size_t i = 0; i < prob_data->num_streams; i++) {
+        guint64 frames = prob_data->frames[i].exchange(0);
+        guint64 objects = prob_data->objects[i].exchange(0);
+        g_print("[STATS] camera %zu: %.1f fps, %.1f objects/frame%s\n", i,
+                frames / seconds,
+                frames ? (double)objects / frames : 0.0,
+                frames ? "" : " (no frames reach inference)");
+    }
+    return G_SOURCE_CONTINUE;
+}
+
 void draw_object_meta(NvOSD_RectParams* bounding_box, NvOSD_TextParams* text_params,
-                      const std::string& class_name, int track_id, float confidence) {
+                      const std::string& class_name, int64_t track_id, float confidence) {
 
     // Настройка рамки
     bounding_box->border_width = 2;
@@ -261,7 +290,8 @@ void draw_object_meta(NvOSD_RectParams* bounding_box, NvOSD_TextParams* text_par
 
     // Форматирование текста
     char buffer[128];
-    snprintf(buffer, sizeof(buffer), "%d %s %.2f", track_id, class_name.c_str(), confidence);
+    snprintf(buffer, sizeof(buffer), "%lld %s %.2f", static_cast<long long>(track_id),
+            class_name.c_str(), confidence);
 
     // Выделение памяти под строку (DeepStream освобождает её через g_free).
     // Старый текст, если его уже проставил nvinfer, освобождаем, чтобы не текла память.
@@ -311,7 +341,9 @@ void draw_point_with_latlng(NvDsBatchMeta* batch_meta, NvDsFrameMeta* frame_meta
 
     NvOSD_TextParams* label = &display_meta->text_params[display_meta->num_labels];
     char buffer[128];
-    snprintf(buffer, sizeof(buffer), "lat: %.4f lng: %.4f", lat, lng);
+    // 6 знаков после запятой — около 0.1 м; при 4 знаках (~10 м) подпись
+    // почти не меняется, пока самолёт движется по рулёжке
+    snprintf(buffer, sizeof(buffer), "lat: %.6f lng: %.6f", lat, lng);
 
     label->display_text = g_strdup(buffer);
 

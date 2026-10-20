@@ -27,7 +27,7 @@ static struct json_object *future_to_json(const future_t *f)
             "lng", json_object_new_double(f->lng)
             );
     json_object_object_add(future,
-            "object_id", json_object_new_int(f->object_id)
+            "object_id", json_object_new_int64(f->object_id)
             );
     json_object_object_add(future,
             "name", json_object_new_string(f->name ? f->name : "")

@@ -116,6 +116,25 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
 
     config.nvinfer_config = resolve_path(base_dir, config.nvinfer_config);
 
+    if (!get_bool(kf, "tracker", "enabled", config.tracker_enabled, error)) {
+        return false;
+    }
+    if (config.tracker_enabled) {
+        if (!get_string(kf, "tracker", "ll-lib-file", true, config.tracker_lib, error) ||
+                !get_string(kf, "tracker", "ll-config-file", true, config.tracker_config, error) ||
+                !get_int(kf, "tracker", "width", config.tracker_width, error) ||
+                !get_int(kf, "tracker", "height", config.tracker_height, error)) {
+            return false;
+        }
+        if (config.tracker_width <= 0 || config.tracker_height <= 0 ||
+                config.tracker_width % 32 != 0 || config.tracker_height % 32 != 0) {
+            error = "[tracker] width and height must be positive multiples of 32";
+            return false;
+        }
+        config.tracker_lib = resolve_path(base_dir, config.tracker_lib);
+        config.tracker_config = resolve_path(base_dir, config.tracker_config);
+    }
+
     // Группы [cameraN]: номера должны идти подряд с нуля, номер = camera_id
     std::vector<std::pair<long, std::string>> camera_groups;
     gchar **groups = g_key_file_get_groups(kf, NULL);
