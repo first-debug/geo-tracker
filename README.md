@@ -6,7 +6,17 @@
 
 ## Запуск
 
-Сборка и запуск — только в Docker-контейнере с DeepStream.
+Сборка и запуск — только в Docker-контейнере с DeepStream 9.0.
+
+Настоящие конфиги в git не хранятся, в репозитории лежат шаблоны `*.example`.
+Перед первым запуском скопируйте их и подставьте свои значения:
+
+```
+cp configs/app.ini.example configs/app.ini
+cp configs/config_infer_primary_yolo.txt.example configs/config_infer_primary_yolo.txt
+cp configs/warper.toml.example configs/warper.toml
+cp configs/calibration/camera.csv.example configs/calibration/camera0.csv   # и так для каждой камеры
+```
 
 ```
 make

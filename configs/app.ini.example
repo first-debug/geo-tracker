@@ -1,4 +1,5 @@
-# Конфигурация sheremetevo-app.
+# Шаблон конфигурации sheremetevo-app.
+# Скопируйте в configs/app.ini и подставьте свои адреса; app.ini в git не хранится.
 # Относительные пути считаются от папки, где лежит этот файл.
 
 [app]
@@ -13,10 +14,10 @@ batched-push-timeout-us=40000
 [output]
 # видео с разметкой: <uri-prefix>_<номер камеры>; false — без видеовыхода (быстрее)
 enabled=true
-uri-prefix=rtspt://192.168.10.185:8554/output
+uri-prefix=rtsp://<output-host>:8554/output
 
 [udp]
-host=192.168.10.185
+host=<receiver-host>
 port=6767
 
 [geo]
@@ -33,25 +34,25 @@ min-aspect-ratio=1.2
 #   dewarper-config — конфиг nvdewarper; не задан — кадр не выпрямляется
 # Модули преобразования добавляются в конвейер, только если их параметры заданы.
 [camera0]
-uri=rtspt://192.168.10.185:8554/svo1
+uri=rtsp://<camera-host>:8554/camera0
 flip-method=1
 dewarper-config=warper.toml
 calibration=calibration/camera0.csv
 
 [camera1]
-uri=rtspt://192.168.10.185:8554/svo2
+uri=rtsp://<camera-host>:8554/camera1
 flip-method=1
 dewarper-config=warper.toml
 calibration=calibration/camera1.csv
 
 [camera2]
-uri=rtspt://192.168.10.185:8554/svo3
+uri=rtsp://<camera-host>:8554/camera2
 flip-method=1
 dewarper-config=warper.toml
 calibration=calibration/camera2.csv
 
 [camera3]
-uri=rtspt://192.168.10.185:8554/svo4
+uri=rtsp://<camera-host>:8554/camera3
 flip-method=1
 dewarper-config=warper.toml
 calibration=calibration/camera3.csv

@@ -4,3 +4,10 @@ media/
 graphs/
 models/*
 !models/*.pt
+
+# Настоящие конфиги с адресами и калибровкой не хранятся в git,
+# в репозитории лежат только шаблоны *.example
+configs/app.ini
+configs/config_infer_primary_yolo.txt
+configs/warper*.toml
+configs/calibration/*.csv

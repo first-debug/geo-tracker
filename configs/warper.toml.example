@@ -1,3 +1,6 @@
+# Шаблон конфига nvdewarper. Скопируйте, например, в warper.toml
+# (можно отдельный файл на камеру) и укажите в dewarper-config камеры в app.ini.
+# Параметры подбираются под объектив конкретной камеры.
 [property]
 #dewarp-dump-frames=10
 output-width=1728

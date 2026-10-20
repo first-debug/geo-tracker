@@ -1,3 +1,5 @@
+# Шаблон конфига nvinfer для YOLO. Скопируйте в config_infer_primary_yolo.txt.
+# Пути к моделям считаются от папки этого файла; engine пересобирается из ONNX под конкретную GPU.
 [property]
 gpu-id=0
 net-scale-factor=0.0039215697906911373
@@ -16,7 +18,7 @@ cluster-mode=2
 maintain-aspect-ratio=1
 symmetric-padding=1
 parse-bbox-func-name=NvDsInferParseYoloCuda
-custom-lib-path=/mnt/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so
+custom-lib-path=/path/to/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so
 engine-create-func-name=NvDsInferYoloCudaEngineGet
 
 [class-attrs-4]
