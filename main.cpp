@@ -13,11 +13,13 @@
 #include "custom_bins.hpp"
 #include "app_config.hpp"
 #include "probers.hpp"
+#include "source_manager.hpp"
 #include "udp_connection.hpp"
 
 typedef struct {
     GMainLoop *loop;
     GstElement *pipeline;
+    SourceManager *sources;
     gboolean eos_sent;
 } SignalData;
 
@@ -40,6 +42,7 @@ static gboolean on_terminate_signal(gpointer user_data) {
     if (!data->eos_sent) {
         g_print("\nStopping pipeline (send the signal again to force quit)...\n");
         data->eos_sent = TRUE;
+        source_manager_shutdown(*data->sources);
         gst_element_send_event(data->pipeline, gst_event_new_eos());
         g_timeout_add_seconds(EOS_TIMEOUT_SEC, on_eos_timeout, data);
     } else {
@@ -166,6 +169,10 @@ int main(int argc, char *argv[]) {
 
     g_object_set(G_OBJECT(pgie), "config-file-path", config.nvinfer_config.c_str(), NULL);
 
+    SourceManager sources;
+    sources.stall_timeout_sec = config.stall_timeout_sec;
+    sources.reconnect_interval_sec = config.reconnect_interval_sec;
+
     gchar buffer[40];
     GstElement *new_bin = NULL;
     for (int index = 0; index < num_sources; index++) {
@@ -184,21 +191,9 @@ int main(int argc, char *argv[]) {
             return -1;
         }
 
-        gst_bin_add_many(GST_BIN(pipeline), new_bin, NULL);
-
-        snprintf(buffer, 17, "sink_%1d", index);
-        src_pad = gst_element_get_static_pad(new_bin, "src");
-        sink_pad = gst_element_request_pad_simple(streammux, buffer);
-
-        if (gst_pad_link(src_pad, sink_pad) != GST_PAD_LINK_OK) {
-            g_printerr("Cannot link bin_src and streammux.\n");
-            gst_object_unref(src_pad);
-            gst_object_unref(sink_pad);
+        if (!source_manager_add(sources, pipeline, streammux, new_bin, index)) {
             return -1;
         }
-
-        gst_object_unref(src_pad);
-        gst_object_unref(sink_pad);
     }
 
     if (!gst_element_link(streammux, pgie) ||
@@ -268,16 +263,17 @@ int main(int argc, char *argv[]) {
 
     GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "sheremetevo");
     bus = gst_pipeline_get_bus(GST_PIPELINE(pipeline));
-    BusCallData data = { loop, pipeline };
+    BusCallData data = { loop, pipeline, &sources };
     bus_watch_id = gst_bus_add_watch(bus, bus_call, &data);
     gst_object_unref(bus);
 
-    SignalData signal_data = { loop, pipeline, FALSE };
+    SignalData signal_data = { loop, pipeline, &sources, FALSE };
     guint sigint_id = g_unix_signal_add(SIGINT, on_terminate_signal, &signal_data);
     guint sigterm_id = g_unix_signal_add(SIGTERM, on_terminate_signal, &signal_data);
 
     probe_data.init_stats(num_sources);
     g_timeout_add_seconds(5, print_stream_stats, &probe_data);
+    g_timeout_add_seconds(1, source_manager_watchdog, &sources);
 
     g_print("\nStarting pipline...\n");
     gst_element_set_state(pipeline, GST_STATE_PLAYING);

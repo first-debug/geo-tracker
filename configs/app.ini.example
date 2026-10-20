@@ -11,6 +11,12 @@ frame-height=2752
 # сколько nvstreammux ждёт отставшую камеру, прежде чем отправить пачку без неё
 batched-push-timeout-us=40000
 
+[rtsp]
+# камера без кадров дольше stall-timeout-sec (или с ошибкой) перезапускается;
+# пауза между попытками подключения — reconnect-interval-sec
+stall-timeout-sec=10
+reconnect-interval-sec=5
+
 [output]
 # видео с разметкой: <uri-prefix>_<номер камеры>; false — без видеовыхода (быстрее)
 enabled=true

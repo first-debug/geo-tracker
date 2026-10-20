@@ -25,6 +25,11 @@ struct AppConfig {
     int frame_height = 2752;
     int batched_push_timeout_us = 40000;
 
+    // переподключение камер: камера без кадров дольше stall_timeout_sec
+    // перезапускается, между попытками — reconnect_interval_sec
+    int stall_timeout_sec = 10;
+    int reconnect_interval_sec = 5;
+
     // видеовыход с разметкой: <output_uri_prefix>_<номер камеры>
     bool output_enabled = true;
     std::string output_uri_prefix;
