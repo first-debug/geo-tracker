@@ -7,6 +7,7 @@ media/
 graphs/
 models/*
 !models/*.pt
+!models/export_yolo26.py
 
 # Настоящие конфиги с адресами и калибровкой не хранятся в git,
 # в репозитории лежат только шаблоны *.example
