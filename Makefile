@@ -40,7 +40,7 @@ LIBS:= $(shell pkg-config --libs $(PKGS)) \
 		-Wl,-rpath,$(LIB_INSTALL_DIR) \
 		-pthread
 
-.PHONY: all run install clean
+.PHONY: all run install clean test
 
 all: $(TARGET)
 
@@ -85,6 +85,42 @@ gen-graph: $(TARGET) | $(GRAPHS_DIR)
 
 graph:
 	dot -Tpng graphs/sheremetevo.dot -o graphs/sheremetevo.png
+
+# Юнит-тесты: собираются без DeepStream, GStreamer и GPU (нужны только
+# glib, OpenCV и protobuf), поэтому запускаются где угодно, в том числе в CI.
+#   make test                    — собрать и запустить все тесты
+#   make test TEST_FILTER=csv    — только тесты, в имени которых есть подстрока
+TEST_DIR:= $(BUILD_DIR)/tests
+TEST_BIN:= $(TEST_DIR)/run-tests
+TEST_PKGS:= glib-2.0 opencv4 protobuf
+# код приложения, который покрывают тесты
+TEST_APP_SRCS:= app_config.cpp pixel_transformer.cpp points_sender.cpp udp_connection.cpp
+TEST_SRCS:= $(wildcard tests/*.cpp)
+TEST_OBJS:= $(addprefix $(TEST_DIR)/, $(notdir $(TEST_APP_SRCS:.cpp=.o) $(TEST_SRCS:.cpp=.o))) \
+			$(TEST_DIR)/points.pb.o
+TEST_CFLAGS:= -std=gnu++17 -O1 -g -Wall -Wextra \
+			  $(shell pkg-config --cflags $(TEST_PKGS)) \
+			  -I$(GEN_DIR) \
+			  -DTEST_SRC_DIR='"$(CURDIR)"'
+TEST_LIBS:= $(shell pkg-config --libs $(TEST_PKGS)) -pthread
+
+test: $(TEST_BIN)
+	$(TEST_BIN) $(TEST_FILTER)
+
+$(TEST_DIR):
+	mkdir -p $@
+
+$(TEST_DIR)/%.o: %.cpp $(INCS) $(PROTO_HDRS) Makefile | $(TEST_DIR)
+	$(CXX) -c -o $@ $(TEST_CFLAGS) $<
+
+$(TEST_DIR)/%.o: tests/%.cpp tests/test.hpp $(INCS) $(PROTO_HDRS) Makefile | $(TEST_DIR)
+	$(CXX) -c -o $@ $(TEST_CFLAGS) $<
+
+$(TEST_DIR)/%.pb.o: $(GEN_DIR)/%.pb.cc $(GEN_DIR)/%.pb.h | $(TEST_DIR)
+	$(CXX) -c -o $@ $(TEST_CFLAGS) $<
+
+$(TEST_BIN): $(TEST_OBJS) Makefile
+	$(CXX) -o $@ $(TEST_OBJS) $(TEST_LIBS)
 
 clean:
 	rm -rf $(BUILD_DIR)
