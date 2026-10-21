@@ -199,7 +199,7 @@ GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad * pad,
 
             // get a geo point in format (lng, lat)
             auto geo_coords = transformer.pixel_to_geo(x, y);
-            if (!geo_coords || !prob_data->zone.contains(geo_coords->first, geo_coords->second)) {
+            if (!geo_coords || !prob_data->zones[stream_id].contains(geo_coords->first, geo_coords->second)) {
                 continue;
             }
 

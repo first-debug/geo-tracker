@@ -207,6 +207,15 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
         }
         camera.dewarper_config = resolve_path(base_dir, camera.dewarper_config);
         camera.calibration_file = resolve_path(base_dir, camera.calibration_file);
+        // zone= с пустым значением отключает общую зону для этой камеры
+        if (g_key_file_has_key(kf, group, "zone", NULL)) {
+            if (!get_string(kf, group, "zone", false, camera.zone_file, error)) {
+                return false;
+            }
+            camera.zone_file = resolve_path(base_dir, camera.zone_file);
+        } else {
+            camera.zone_file = config.zone_file;
+        }
         config.cameras.push_back(camera);
     }
 

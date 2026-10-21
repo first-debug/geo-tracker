@@ -14,8 +14,9 @@ struct pgie_probe_data {
     PointsSender *sender = nullptr;
     // гомография для каждой камеры, индекс — номер входа nvstreammux (pad_index)
     std::vector<PixelGeoTransformer> transformers;
-    // зона, вне которой точки не отправляются; пустая — без фильтра
-    GeoZone zone;
+    // зона камеры, вне которой точки не отправляются, индекс как у transformers;
+    // пустая — без фильтра
+    std::vector<GeoZone> zones;
     // минимальное отношение ширины bbox к высоте
     double min_aspect_ratio = 1.2;
 
