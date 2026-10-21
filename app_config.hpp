@@ -45,6 +45,9 @@ struct AppConfig {
     double ransac_threshold_m = 10.0;
     // минимальное отношение ширины bbox к высоте, чтобы объект считался самолётом
     double min_aspect_ratio = 1.2;
+    // CSV с вершинами зоны (lng,lat), вне которой точки не отправляются;
+    // пустая строка — без фильтра по зоне
+    std::string zone_file;
 
     // порядок камер задаёт camera_id: [camera0], [camera1], ...
     std::vector<CameraConfig> cameras;

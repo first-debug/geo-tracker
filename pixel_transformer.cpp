@@ -1,6 +1,7 @@
 #include <opencv2/opencv.hpp>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include "pixel_transformer.hpp"
 
 void PixelGeoTransformer::calculate_homography(double ransac_threshold_m) {
@@ -51,6 +52,23 @@ void PixelGeoTransformer::calculate_homography(double ransac_threshold_m) {
             H_flat[i * 3 + j] = H_double.at<double>(i, j);
         }
     }
+    // Знак w и порог горизонта берутся по точкам, вошедшим в гомографию:
+    // выброс за горизонтом не должен сдвигать порог.
+    std::vector<double> calib_w;
+    for (size_t i = 0; i < src_points.size(); ++i) {
+        if (inliers_mask.empty() || inliers_mask.at<uchar>(static_cast<int>(i))) {
+            calib_w.push_back(H_flat[6] * src_points[i].x + H_flat[7] * src_points[i].y + H_flat[8]);
+        }
+    }
+    size_t positive = std::count_if(calib_w.begin(), calib_w.end(), [](double w) { return w > 0; });
+    w_sign = positive * 2 >= calib_w.size() ? 1.0 : -1.0;
+    double min_abs_w = std::numeric_limits<double>::infinity();
+    for (double w : calib_w) {
+        if (w * w_sign > 0) {
+            min_abs_w = std::min(min_abs_w, w * w_sign);
+        }
+    }
+    w_min = std::max(min_abs_w * kHorizonMargin, 1e-12);
     is_valid = true;
 
     // Ошибка репроекции на калибровочных точках, в метрах
@@ -95,8 +113,8 @@ std::optional<std::pair<double, double>> PixelGeoTransformer::pixel_to_geo(
 
     double w = H_flat[6] * x_pixel + H_flat[7] * y_pixel + H_flat[8];
 
-    // Защита от деления на ноль (точка уходит в бесконечность)
-    if (std::abs(w) < 1e-9) {
+    // Горизонт и всё, что над ним (знак w другой), плюс слишком далёкие точки
+    if (w * w_sign < w_min) {
         return std::nullopt;
     }
 

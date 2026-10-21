@@ -121,6 +121,15 @@ int main(int argc, char *argv[]) {
                 cam, st.inliers, st.points, st.median_m, st.p90_m, st.max_m);
     }
 
+    if (!config.zone_file.empty()) {
+        if (!load_geo_zone(config.zone_file, probe_data.zone, error)) {
+            g_printerr("Zone loading failed: %s\n", error.c_str());
+            return -1;
+        }
+        g_print("[ZONE] %zu vertices, area %.0f m2; points outside are not sent\n",
+                probe_data.zone.vertex_count(), probe_data.zone.area_m2());
+    }
+
     loop = g_main_loop_new(NULL, FALSE);
 
     // Elements initialization

@@ -47,6 +47,10 @@ max-datagram-bytes=1400
 ransac-threshold-m=10
 # минимальное отношение ширины bbox к высоте
 min-aspect-ratio=1.2
+# CSV с вершинами зоны (lng,lat), в которой ожидаются объекты; точки вне
+# зоны не отправляются. Без параметра фильтра по зоне нет.
+# Шаблон: configs/zone.csv.example
+#zone=zone.csv
 
 [tracker]
 # true — добавить nvtracker: у объектов появится постоянный object_id;
