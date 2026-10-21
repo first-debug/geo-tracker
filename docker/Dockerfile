@@ -82,7 +82,8 @@ COPY --from=build /opt/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_c
 COPY --from=build /src/build/sheremetevo-app /app/sheremetevo-app
 COPY docker/entrypoint.sh /app/entrypoint.sh
 COPY docker/healthcheck.sh /app/healthcheck.sh
-RUN chmod +x /app/entrypoint.sh /app/healthcheck.sh
+COPY tools/build_engine.sh /app/build_engine.sh
+RUN chmod +x /app/entrypoint.sh /app/healthcheck.sh /app/build_engine.sh
 
 # Проверка образа без GPU: все библиотеки найдены (кроме libcuda из драйвера)
 # и нужные элементы GStreamer есть. gst-inspect при этом создаёт кэш реестра
@@ -99,11 +100,11 @@ RUN missing="$(ldd /app/sheremetevo-app | grep 'not found' | grep -v 'libcuda.so
 ENV NVIDIA_DRIVER_CAPABILITIES=compute,utility,video \
     GST_DEBUG=1
 
-# configs/ монтируется только на чтение, models/ — на запись (кэш TensorRT engine)
+# configs/ монтируется только на чтение, models/ — на запись (кэш TensorRT engine).
 VOLUME ["/app/models"]
 
 # Приложение пишет heartbeat-файл ([health] в app.ini). start-period длинный:
-# при первом запуске TensorRT строит engine несколько минут.
+# при первом запуске entrypoint.sh строит TensorRT engine несколько минут.
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10m --retries=3 \
     CMD ["/app/healthcheck.sh"]
 WORKDIR /app

@@ -8,7 +8,7 @@ TensorRT внутри `nvinfer`, разбор выхода сети делает
 Цепочка файлов:
 
 ```
-models/yolo26m.pt ──export_yolo26.py──► models/yolo26m.onnx + labels.txt ──nvinfer (при старте)──► *.engine
+models/yolo26m.pt ──export_yolo26.py──► models/yolo26m.onnx + labels.txt ──make engine / entrypoint.sh──► *.engine
 ```
 
 В git хранится только `yolo26m.pt` и скрипт экспорта. ONNX, `labels.txt` и engine
@@ -64,22 +64,55 @@ CUDA_VER=<версия, например 12.8> make -C nvdsinfer_custom_impl_Yol
 
 ## 3. TensorRT engine
 
-При первом запуске `nvinfer` не находит `model-engine-file` и строит engine из ONNX —
-это занимает несколько минут. Библиотека DeepStream-Yolo сохраняет его в текущей
-папке под именем `model_b<batch>_gpu<id>_<fp32|fp16|int8>.engine`. Это имя и нужно
-указать в `model-engine-file`, тогда следующие запуски стартуют сразу.
+Engine строится отдельным шагом до запуска приложения скриптом `tools/build_engine.sh`.
+Скрипт запускает короткий тестовый конвейер `nvinfer` с тем же конфигом, что и у
+приложения, поэтому engine получается таким же, как если бы его строил сам `nvinfer`
+при старте (через библиотеку DeepStream-Yolo, с динамическим или статическим batch).
+Готовый файл кладётся по пути из `model-engine-file`, имя может быть любым.
 
-- В Docker приложение запускается из смонтированной `models/`, поэтому engine
-  сохраняется туда автоматически (см. [deploy.md](deploy.md#tensorrt-engine)).
-- При ручном запуске engine появится в папке, откуда запущено приложение; перенесите
-  его в `models/`.
+Внутри контейнера DeepStream, из корня репозитория:
 
-Engine пересобирается, если поменялись:
+```
+make engine              # построить, если нужно (несколько минут)
+make engine-rebuild      # построить заново в любом случае
+make engine NVINFER_CONFIG=configs/другой_конфиг.txt
+```
 
-- видеокарта, драйвер или версия TensorRT/DeepStream;
+В Docker то же самое делает `entrypoint.sh` при каждом старте контейнера
+(см. [deploy.md](deploy.md#tensorrt-engine)). Собирать engine в Dockerfile нельзя: при
+`docker build` нет GPU, а engine привязан к видеокарте и версии TensorRT.
+
+Рядом с engine сохраняется `<engine>.stamp`:
+
+```
+onnx-sha256=…
+tensorrt=libnvinfer.so.10.…
+gpu=NVIDIA GeForce RTX …, 8.9
+batch-size=4
+network-mode=0
+int8-calib-file=
+```
+
+При запуске скрипт сравнивает его с текущими значениями и пересобирает engine, если
+поменялись:
+
+- ONNX (по хэшу содержимого, имя файла может остаться прежним);
+- видеокарта или версия TensorRT (новый образ DeepStream);
 - `batch-size` (число камер) — при статическом ONNX нужен и новый экспорт;
-- `network-mode` (FP32/FP16/INT8);
-- сам ONNX.
+- `network-mode` (FP32/FP16/INT8) или файл калибровки INT8.
+
+Если всё совпадает, проверка занимает около секунды (хэш ONNX). Engine без `.stamp`
+(например, построенный приложением раньше) проверить нельзя, поэтому он один раз
+строится заново. Старый engine заменяется только после успешной сборки.
+
+Изменения, которые скрипт не видит, — например, новая версия парсера DeepStream-Yolo
+(`DSYOLO_REF`) — требуют `make engine-rebuild` или удаления engine.
+
+Если engine всё-таки не нашёлся (приложение запущено без `make engine`), `nvinfer`
+построит его сам при старте и библиотека DeepStream-Yolo сохранит его в текущую папку
+под именем `model_b<batch>_gpu<id>_<fp32|fp16|int8>.engine`. Такой файл нужно вручную
+перенести по пути из `model-engine-file`, иначе сборка будет повторяться при каждом
+запуске. Поэтому удобнее всегда запускать `make engine` перед приложением.
 
 ## Параметры nvinfer
 
