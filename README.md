@@ -65,11 +65,27 @@
 Остановка — `Ctrl+C`, `SIGTERM` или `docker compose down`: приложение отправляет EOS и
 корректно закрывает выходные потоки. Повторный сигнал завершает процесс сразу.
 
+## Тесты
+
+Юнит-тесты не требуют GPU и DeepStream: им нужны только glib, OpenCV и protobuf,
+поэтому их можно запускать в контейнере DeepStream, в CI или на любой машине с этими
+пакетами (`libglib2.0-dev libopencv-dev libprotobuf-dev protobuf-compiler`).
+
+```
+make test                     # собрать и запустить все тесты
+make test TEST_FILTER=csv     # только тесты, в имени которых есть подстрока
+```
+
+Покрыты: гомография пиксель → WGS84 (`pixel_transformer`: точность, RANSAC в метрах,
+ошибка репроекции), разбор `app.ini` и CSV калибровки (`app_config`), сборка
+protobuf-сообщений и разбиение на датаграммы (`points_sender`, отправка на 127.0.0.1).
+Тесты лежат в `tests/`, каркас — `tests/test.hpp` (без внешних библиотек).
+
 ## Структура репозитория
 
 ```
 *.cpp, *.hpp           исходники приложения (см. docs/architecture.md)
-Makefile               сборка: make, make run, make gen-graph, make graph, make clean
+Makefile               сборка: make, make run, make test, make gen-graph, make graph, make clean
 configs/               конфиги приложения, nvinfer, nvdewarper, калибровки (шаблоны *.example)
 models/                веса YOLO26 (.pt), скрипт экспорта export_yolo26.py;
                        ONNX, labels.txt и engine создаются локально и в git не хранятся
@@ -77,6 +93,7 @@ build/                 результат сборки (в git не хранит
 graphs/                графы конвейера для отладки (make gen-graph, в git не хранится)
 proto/points.proto     схема UDP-сообщений (protobuf), см. docs/output-format.md
 tools/udp_receiver.py  отладочный приёмник UDP-сообщений
+tests/                 юнит-тесты (make test)
 docker/, docker-compose.yml, .env.example
                        сборка образа и запуск в Docker (см. docs/deploy.md)
 docs/                  документация
