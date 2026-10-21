@@ -12,6 +12,7 @@
 #include "bus_call.hpp"
 #include "custom_bins.hpp"
 #include "app_config.hpp"
+#include "health.hpp"
 #include "points_sender.hpp"
 #include "probers.hpp"
 #include "source_manager.hpp"
@@ -280,9 +281,23 @@ int main(int argc, char *argv[]) {
     g_timeout_add_seconds(5, print_stream_stats, &probe_data);
     g_timeout_add_seconds(1, source_manager_watchdog, &sources);
 
+    HealthMonitor health;
+    health.heartbeat_file = config.heartbeat_file;
+    health.hang_timeout_sec = config.hang_timeout_sec;
+    health.no_frames_restart_sec = config.no_frames_restart_sec;
+    health.sources = &sources;
+    health.stall_timeout_sec = config.stall_timeout_sec;
+    health.on_fatal = [](gpointer user_data) { on_terminate_signal(user_data); };
+    health.on_fatal_data = &signal_data;
+    health_attach(health, analytics_tail);
+
     g_print("\nStarting pipline...\n");
     gst_element_set_state(pipeline, GST_STATE_PLAYING);
+    // После перехода в PLAYING: в нём nvinfer может минутами строить engine,
+    // и сторож не должен принять это за зависание.
+    health_start(health);
     g_main_loop_run(loop);
+    health_stop(health);
 
     // Обработчики сигналов GLib работают только внутри главного цикла, а он уже
     // остановлен. Возвращаем стандартное поведение, чтобы Ctrl+C убивал процесс,
@@ -301,5 +316,6 @@ int main(int argc, char *argv[]) {
     g_source_remove(bus_watch_id);
     g_main_loop_unref(loop);
 
-    return 0;
+    // Ненулевой код, если приложение остановил контроль работоспособности
+    return health.failed ? 1 : 0;
 }

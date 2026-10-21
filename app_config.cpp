@@ -101,7 +101,10 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
             !get_double(kf, "geo", "ransac-threshold-m", config.ransac_threshold_m, error) ||
             !get_double(kf, "geo", "min-aspect-ratio", config.min_aspect_ratio, error) ||
             !get_int(kf, "rtsp", "stall-timeout-sec", config.stall_timeout_sec, error) ||
-            !get_int(kf, "rtsp", "reconnect-interval-sec", config.reconnect_interval_sec, error)) {
+            !get_int(kf, "rtsp", "reconnect-interval-sec", config.reconnect_interval_sec, error) ||
+            !get_string(kf, "health", "heartbeat-file", false, config.heartbeat_file, error) ||
+            !get_int(kf, "health", "hang-timeout-sec", config.hang_timeout_sec, error) ||
+            !get_int(kf, "health", "no-frames-restart-sec", config.no_frames_restart_sec, error)) {
         return false;
     }
 
@@ -126,12 +129,17 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
         error = "[rtsp] stall-timeout-sec and reconnect-interval-sec must be positive";
         return false;
     }
+    if (config.hang_timeout_sec < 0 || config.no_frames_restart_sec < 0) {
+        error = "[health] hang-timeout-sec and no-frames-restart-sec must be non-negative";
+        return false;
+    }
     if (config.ransac_threshold_m <= 0) {
         error = "[geo] ransac-threshold-m must be positive";
         return false;
     }
 
     config.nvinfer_config = resolve_path(base_dir, config.nvinfer_config);
+    config.heartbeat_file = resolve_path(base_dir, config.heartbeat_file);
 
     if (!get_bool(kf, "tracker", "enabled", config.tracker_enabled, error)) {
         return false;

@@ -56,6 +56,14 @@ struct AppConfig {
     std::string tracker_config;  // ll-config-file
     int tracker_width = 960;     // кратно 32
     int tracker_height = 544;    // кратно 32
+
+    // Контроль работоспособности (см. health.hpp): heartbeat-файл для
+    // Docker HEALTHCHECK, пустая строка — не писать
+    std::string heartbeat_file = "/tmp/sheremetevo-health";
+    // главный цикл не отвечает дольше — аварийный выход, 0 — не следить
+    int hang_timeout_sec = 60;
+    // нет обработанных кадров ни с одной камеры дольше — перезапуск, 0 — никогда
+    int no_frames_restart_sec = 300;
 };
 
 /*

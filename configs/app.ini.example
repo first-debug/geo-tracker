@@ -17,6 +17,16 @@ batched-push-timeout-us=40000
 stall-timeout-sec=10
 reconnect-interval-sec=5
 
+[health]
+# heartbeat-файл раз в 2 с: время, возраст последнего кадра, сколько камер шлют
+# кадры; по нему Docker HEALTHCHECK решает, здоров ли контейнер. Пустое — не писать
+heartbeat-file=/tmp/sheremetevo-health
+# главный цикл не отвечает дольше — аварийный выход (Docker перезапустит); 0 — не следить
+hang-timeout-sec=60
+# ни одного обработанного кадра ни с одной камеры дольше — штатная остановка
+# с кодом 1 для перезапуска; 0 — не перезапускать
+no-frames-restart-sec=300
+
 [output]
 # видео с разметкой: <uri-prefix>_<номер камеры>; false — без видеовыхода (быстрее)
 enabled=true
