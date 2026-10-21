@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <atomic>
 #include <condition_variable>
 #include <mutex>
 #include <thread>
@@ -31,6 +32,11 @@ public:
 
     // Отправляет остаток и останавливает поток; повторный вызов ничего не делает
     void stop();
+
+    // Счётчики с начала работы для метрик; читать можно из любого потока
+    std::atomic<uint64_t> datagrams_sent{0};
+    std::atomic<uint64_t> send_errors{0};
+    std::atomic<uint64_t> frames_dropped{0};
 
     PointsSender(const PointsSender &) = delete;
     PointsSender &operator=(const PointsSender &) = delete;

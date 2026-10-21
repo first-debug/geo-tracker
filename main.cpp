@@ -13,6 +13,8 @@
 #include "custom_bins.hpp"
 #include "app_config.hpp"
 #include "health.hpp"
+#include "log.hpp"
+#include "metrics.hpp"
 #include "points_sender.hpp"
 #include "probers.hpp"
 #include "source_manager.hpp"
@@ -70,6 +72,8 @@ int main(int argc, char *argv[]) {
     // Построчная буферизация stdout: иначе при выводе в файл или через tee
     // строки g_print (статистика, сообщения об остановке) теряются при падении.
     setvbuf(stdout, NULL, _IOLBF, 0);
+    // С этого момента g_print/g_printerr идут через журнал: время, уровень, компонент
+    log_init();
 
     if (argc != 2) {
         g_printerr("Usage: %s <path_to_app_config>\n", argv[0]);
@@ -81,6 +85,16 @@ int main(int argc, char *argv[]) {
     if (!load_app_config(argv[1], config, error)) {
         g_printerr("Cannot load config: %s\n", error.c_str());
         return -1;
+    }
+
+    LogConfig log_config;
+    log_level_from_string(config.log_level, log_config.level);
+    log_config.json = config.log_format == "json";
+    log_config.file = config.log_file;
+    log_config.max_size_mb = static_cast<guint>(config.log_max_size_mb);
+    log_config.max_files = static_cast<guint>(config.log_max_files);
+    if (!log_configure(log_config, error)) {
+        LOG_ERROR("LOG", "cannot open log file %s, logging to stdout/stderr only", error.c_str());
     }
 
     const int num_sources = static_cast<int>(config.cameras.size());
@@ -300,10 +314,24 @@ int main(int argc, char *argv[]) {
     health.hang_timeout_sec = config.hang_timeout_sec;
     health.no_frames_restart_sec = config.no_frames_restart_sec;
     health.sources = &sources;
-    health.stall_timeout_sec = config.stall_timeout_sec;
     health.on_fatal = [](gpointer user_data) { on_terminate_signal(user_data); };
     health.on_fatal_data = &signal_data;
     health_attach(health, analytics_tail);
+
+    MetricsServer metrics;
+    if (config.metrics_enabled) {
+        metrics.bind_address = config.metrics_bind_address;
+        metrics.port = config.metrics_port;
+        metrics.probe = &probe_data;
+        metrics.sources = &sources;
+        metrics.sender = &sender;
+        // Включённые, но недоступные метрики — ошибка конфигурации (порт занят):
+        // лучше узнать о ней при старте, чем не получить данные мониторинга.
+        if (!metrics_start(metrics, error)) {
+            LOG_ERROR("METRICS", "cannot start metrics server: %s", error.c_str());
+            return -1;
+        }
+    }
 
     g_print("\nStarting pipline...\n");
     gst_element_set_state(pipeline, GST_STATE_PLAYING);
@@ -312,6 +340,7 @@ int main(int argc, char *argv[]) {
     health_start(health);
     g_main_loop_run(loop);
     health_stop(health);
+    metrics_stop(metrics);
 
     // Обработчики сигналов GLib работают только внутри главного цикла, а он уже
     // остановлен. Возвращаем стандартное поведение, чтобы Ctrl+C убивал процесс,
@@ -329,6 +358,8 @@ int main(int argc, char *argv[]) {
     gst_object_unref(GST_OBJECT(pipeline));
     g_source_remove(bus_watch_id);
     g_main_loop_unref(loop);
+
+    log_shutdown();
 
     // Ненулевой код, если приложение остановил контроль работоспособности
     return health.failed ? 1 : 0;

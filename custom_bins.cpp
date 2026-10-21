@@ -147,7 +147,7 @@ GstElement *create_source_bin(const gchar *uri, gint index, const SourceTransfor
 
     if (!ghost_pad) {
         elem_name = gst_element_get_name(bin);
-        g_print("Failed to create ghost pad for %s\n", elem_name);
+        g_printerr("Failed to create ghost pad for %s\n", elem_name);
 
         g_free(elem_name);
         gst_object_unref(bin);
@@ -178,7 +178,7 @@ GstElement *create_sink_bin(const gchar *uri, gint index) {
     sink = gst_element_factory_make("rtspclientsink", "sink");
 
     if (!bin || !encoder || !parser || !sink) {
-        g_print("Cannot create rtsp source bin for uri = %s\n", uri);
+        g_printerr("Cannot create rtsp source bin for uri = %s\n", uri);
         if (bin) gst_object_unref(bin);
         if (encoder) gst_object_unref(encoder);
         if (parser) gst_object_unref(parser);
@@ -199,7 +199,7 @@ GstElement *create_sink_bin(const gchar *uri, gint index) {
 
     if (!ghost_pad) {
         elem_name = gst_element_get_name(bin);
-        g_print("Failed to create ghost pad for %s\n", elem_name);
+        g_printerr("Failed to create ghost pad for %s\n", elem_name);
 
         g_free(elem_name);
         gst_object_unref(bin);
@@ -243,17 +243,9 @@ GstElement *create_sink_bin(const gchar *uri, gint index) {
     }
 
     if (gst_pad_link(parser_src, sink_pad) != GST_PAD_LINK_OK) {
-        elem_name = gst_element_get_name(parser);
-        g_printerr ("Cannot link %s and ", elem_name);
-        g_free(elem_name);
-
-        elem_name = gst_element_get_name(sink);
-        g_printerr("%s in the ", elem_name);
-        g_free(elem_name);
-
-        elem_name = gst_element_get_name(bin);
-        g_printerr("%s\n", elem_name);
-        g_free(elem_name);
+        // одним вызовом: каждый g_printerr — отдельная запись журнала
+        g_printerr("Cannot link %s and %s in the %s\n", GST_ELEMENT_NAME(parser),
+                GST_ELEMENT_NAME(sink), GST_ELEMENT_NAME(bin));
 
         gst_object_unref(bin);
         return NULL;

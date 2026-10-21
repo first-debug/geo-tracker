@@ -69,6 +69,20 @@ struct AppConfig {
     int hang_timeout_sec = 60;
     // нет обработанных кадров ни с одной камеры дольше — перезапуск, 0 — никогда
     int no_frames_restart_sec = 300;
+
+    // Журнал (см. log.hpp): уровень debug/info/warning/error, формат text/json,
+    // файл с ротацией по размеру; пустой log_file — только stdout/stderr
+    std::string log_level = "info";
+    std::string log_format = "text";
+    std::string log_file;
+    int log_max_size_mb = 50;
+    int log_max_files = 5;
+
+    // Prometheus-метрики (см. metrics.hpp). Если секции [metrics] нет или
+    // enabled=false, порт не открывается.
+    bool metrics_enabled = false;
+    std::string metrics_bind_address = "0.0.0.0";
+    int metrics_port = 9464;
 };
 
 /*

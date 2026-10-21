@@ -105,7 +105,15 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
             !get_int(kf, "rtsp", "reconnect-interval-sec", config.reconnect_interval_sec, error) ||
             !get_string(kf, "health", "heartbeat-file", false, config.heartbeat_file, error) ||
             !get_int(kf, "health", "hang-timeout-sec", config.hang_timeout_sec, error) ||
-            !get_int(kf, "health", "no-frames-restart-sec", config.no_frames_restart_sec, error)) {
+            !get_int(kf, "health", "no-frames-restart-sec", config.no_frames_restart_sec, error) ||
+            !get_string(kf, "logging", "level", false, config.log_level, error) ||
+            !get_string(kf, "logging", "format", false, config.log_format, error) ||
+            !get_string(kf, "logging", "file", false, config.log_file, error) ||
+            !get_int(kf, "logging", "max-size-mb", config.log_max_size_mb, error) ||
+            !get_int(kf, "logging", "max-files", config.log_max_files, error) ||
+            !get_bool(kf, "metrics", "enabled", config.metrics_enabled, error) ||
+            !get_string(kf, "metrics", "bind-address", false, config.metrics_bind_address, error) ||
+            !get_int(kf, "metrics", "port", config.metrics_port, error)) {
         return false;
     }
 
@@ -134,6 +142,23 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
         error = "[health] hang-timeout-sec and no-frames-restart-sec must be non-negative";
         return false;
     }
+    if (config.log_level != "debug" && config.log_level != "info" &&
+            config.log_level != "warning" && config.log_level != "warn" && config.log_level != "error") {
+        error = "[logging] level must be debug, info, warning or error";
+        return false;
+    }
+    if (config.log_format != "text" && config.log_format != "json") {
+        error = "[logging] format must be text or json";
+        return false;
+    }
+    if (config.log_max_size_mb < 0 || config.log_max_files < 0) {
+        error = "[logging] max-size-mb and max-files must be non-negative";
+        return false;
+    }
+    if (config.metrics_enabled && (config.metrics_port <= 0 || config.metrics_port > 65535)) {
+        error = "[metrics] port must be in 1..65535";
+        return false;
+    }
     if (config.ransac_threshold_m <= 0) {
         error = "[geo] ransac-threshold-m must be positive";
         return false;
@@ -142,6 +167,7 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
     config.zone_file = resolve_path(base_dir, config.zone_file);
     config.nvinfer_config = resolve_path(base_dir, config.nvinfer_config);
     config.heartbeat_file = resolve_path(base_dir, config.heartbeat_file);
+    config.log_file = resolve_path(base_dir, config.log_file);
 
     if (!get_bool(kf, "tracker", "enabled", config.tracker_enabled, error)) {
         return false;

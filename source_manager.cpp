@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "log.hpp"
 #include "source_manager.hpp"
 
 static const gint64 US_PER_SEC = 1000000;
@@ -19,7 +20,7 @@ static GstPadProbeReturn source_pad_probe(GstPad *, GstPadProbeInfo *info, gpoin
 
     GstEvent *event = GST_PAD_PROBE_INFO_EVENT(info);
     if (event != NULL && GST_EVENT_TYPE(event) == GST_EVENT_EOS && !slot->manager->shutting_down) {
-        g_print("[RTSP] camera %u: end of stream from server\n", slot->index);
+        LOG_CAM_WARN("RTSP", static_cast<int>(slot->index), "end of stream from server");
         return GST_PAD_PROBE_DROP;
     }
     return GST_PAD_PROBE_OK;
@@ -27,8 +28,18 @@ static GstPadProbeReturn source_pad_probe(GstPad *, GstPadProbeInfo *info, gpoin
 
 static void stop_source(SourceManager &manager, SourceSlot &slot, const gchar *reason) {
     slot.failures++;
-    g_printerr("[RTSP] camera %u: %s, reconnecting in %u s (attempt %u)\n",
-            slot.index, reason, manager.reconnect_interval_sec, slot.failures);
+    slot.restarts_total++;
+    const int camera = static_cast<int>(slot.index);
+
+    if (slot.failures == 1) {
+        slot.lost_since_us = g_get_monotonic_time();
+        LOG_CAM_ERROR("CAMERA", camera, "camera lost: %s, reconnecting in %u s",
+                reason, manager.reconnect_interval_sec);
+    } else {
+        LOG_CAM_WARN("RTSP", camera, "%s, reconnecting in %u s (attempt %u, down for %" G_GINT64_FORMAT " s)",
+                reason, manager.reconnect_interval_sec, slot.failures,
+                (g_get_monotonic_time() - slot.lost_since_us) / US_PER_SEC);
+    }
 
     gst_element_set_state(slot.bin, GST_STATE_NULL);
     slot.state = SourceSlot::State::Stopped;
@@ -41,7 +52,7 @@ static void start_source(SourceSlot &slot) {
 
     // Ошибка подключения, если будет, придёт на шину и снова остановит камеру
     if (!gst_element_sync_state_with_parent(slot.bin)) {
-        g_printerr("[RTSP] camera %u: cannot start source\n", slot.index);
+        LOG_CAM_ERROR("RTSP", static_cast<int>(slot.index), "cannot start source");
     }
 }
 
@@ -117,6 +128,12 @@ void source_manager_shutdown(SourceManager &manager) {
     }
 }
 
+bool source_manager_is_receiving(const SourceManager &manager, const SourceSlot &slot, gint64 now_us) {
+    gint64 last = slot.last_buffer_us;
+    return slot.state == SourceSlot::State::Running && last != 0 && last > slot.state_since_us &&
+            now_us - last < (gint64)manager.stall_timeout_sec * US_PER_SEC;
+}
+
 gboolean source_manager_watchdog(gpointer user_data) {
     SourceManager *manager = static_cast<SourceManager *>(user_data);
     if (manager->shutting_down) {
@@ -137,7 +154,9 @@ gboolean source_manager_watchdog(gpointer user_data) {
 
         gint64 last_buffer = slot.last_buffer_us;
         if (last_buffer > slot.state_since_us && slot.failures > 0) {
-            g_print("[RTSP] camera %u: stream restored after %u attempt(s)\n", slot.index, slot.failures);
+            LOG_CAM_INFO("CAMERA", static_cast<int>(slot.index),
+                    "camera restored after %" G_GINT64_FORMAT " s down, %u reconnect attempt(s)",
+                    (now - slot.lost_since_us) / US_PER_SEC, slot.failures);
             slot.failures = 0;
         }
 

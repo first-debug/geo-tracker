@@ -1,10 +1,10 @@
 #include <time.h>
 #include <chrono>
-#include <iostream>
 #include <utility>
 
 #include <google/protobuf/io/coded_stream.h>
 
+#include "log.hpp"
 #include "points_sender.hpp"
 
 using google::protobuf::io::CodedOutputStream;
@@ -69,6 +69,7 @@ void PointsSender::add_frame(const points_message_t &msg) {
         }
         if (pending.size() >= kMaxPendingFrames) {
             dropped_frames++;
+            frames_dropped++;
             return;
         }
         pending.push_back(std::move(frame));
@@ -116,7 +117,7 @@ void PointsSender::run() {
         lock.unlock();
 
         if (dropped > 0) {
-            std::cerr << "points_sender: queue overflow, " << dropped << " frames dropped" << std::endl;
+            LOG_WARN("UDP", "queue overflow, %zu frames dropped", dropped);
         }
         // при пакетной отправке пустой Batch раз в интервал тоже уходит:
         // получатель видит, что приложение работает, даже если камеры отключены
@@ -170,8 +171,7 @@ void PointsSender::flush(std::vector<sheremetevo::Frame> &frames) {
                 part_size = part_base;
             }
             if (kBatchHeaderMax + field_size(part_size + det_entry) > max_datagram_bytes) {
-                std::cerr << "points_sender: detection of " << det_entry
-                          << " bytes does not fit into a datagram, dropped" << std::endl;
+                LOG_WARN("UDP", "detection of %zu bytes does not fit into a datagram, dropped", det_entry);
                 continue;
             }
             *part.add_detections() = std::move(det);
@@ -196,16 +196,20 @@ void PointsSender::send_batch(sheremetevo::Batch &batch) {
     size_t size = batch.ByteSizeLong();
     if (size > buffer.size()) {
         // не должно случаться: размеры считаются при сборке пачки
-        std::cerr << "points_sender: batch of " << size << " bytes exceeds max datagram size "
-                  << buffer.size() << ", sent anyway" << std::endl;
+        LOG_WARN("UDP", "batch of %zu bytes exceeds max datagram size %zu, sent anyway",
+                size, buffer.size());
         buffer.resize(size);
     }
 
     if (!batch.SerializeToArray(buffer.data(), static_cast<int>(size))) {
-        std::cerr << "points_sender: cannot serialize batch" << std::endl;
+        send_errors++;
+        LOG_ERROR("UDP", "cannot serialize batch");
     } else if (udp_conn.send(buffer.data(), size) < 0) {
-        std::cerr << "points_sender: failed to send " << size << " bytes to "
-                  << udp_conn.server_ip << ":" << udp_conn.server_port << std::endl;
+        send_errors++;
+        LOG_ERROR("UDP", "failed to send %zu bytes to %s:%u",
+                size, udp_conn.server_ip.c_str(), static_cast<unsigned>(udp_conn.server_port));
+    } else {
+        datagrams_sent++;
     }
 
     batch.Clear();
