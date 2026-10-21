@@ -7,6 +7,7 @@
 #include "gstnvdsmeta.h"
 #include "nvdsmeta.h"
 
+#include "log.hpp"
 #include "probers.hpp"
 #include "message.hpp"
 #include "points_sender.hpp"
@@ -161,6 +162,7 @@ GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad * pad,
     }
 
     GArray *new_futures_array = g_array_new(FALSE, FALSE, sizeof(future_t));
+    const guint64 now_ns = static_cast<guint64>(g_get_real_time()) * 1000;
 
     NvDsFrameMetaList *frame_meta_list = batch_meta->frame_meta_list;
 
@@ -169,15 +171,20 @@ GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad * pad,
         guint stream_id = frame_meta->pad_index;
 
         if (stream_id >= prob_data->transformers.size()) {
-            g_printerr("[PROBE] No calibration for stream %u, frame skipped.\n", stream_id);
+            LOG_CAM_ERROR("PROBE", static_cast<int>(stream_id), "no calibration, frame skipped");
             continue;
         }
 
         const PixelGeoTransformer &transformer = prob_data->transformers[stream_id];
 
         if (stream_id < prob_data->num_streams) {
-            prob_data->frames[stream_id]++;
-            prob_data->objects[stream_id] += frame_meta->num_obj_meta;
+            StreamCounters &c = prob_data->counters[stream_id];
+            c.frames++;
+            c.objects += frame_meta->num_obj_meta;
+            if (frame_meta->ntp_timestamp != 0 && now_ns > frame_meta->ntp_timestamp) {
+                c.latency_sum_us += (now_ns - frame_meta->ntp_timestamp) / 1000;
+                c.latency_count++;
+            }
         }
 
         g_array_set_size(new_futures_array, 0);
@@ -249,12 +256,21 @@ gboolean print_stream_stats(gpointer user_data) {
     }
 
     for (size_t i = 0; i < prob_data->num_streams; i++) {
-        guint64 frames = prob_data->frames[i].exchange(0);
-        guint64 objects = prob_data->objects[i].exchange(0);
-        g_print("[STATS] camera %zu: %.1f fps, %.1f objects/frame%s\n", i,
-                frames / seconds,
-                frames ? (double)objects / frames : 0.0,
-                frames ? "" : " (no frames reach inference)");
+        guint64 total_frames = prob_data->counters[i].frames;
+        guint64 total_objects = prob_data->counters[i].objects;
+        guint64 frames = total_frames - prob_data->last_frames[i];
+        guint64 objects = total_objects - prob_data->last_objects[i];
+        prob_data->last_frames[i] = total_frames;
+        prob_data->last_objects[i] = total_objects;
+        prob_data->fps[i] = frames / seconds;
+
+        if (frames) {
+            log_write(LogLevel::Info, "STATS", static_cast<int>(i), "%.1f fps, %.1f objects/frame",
+                    prob_data->fps[i], (double)objects / frames);
+        } else {
+            log_write(LogLevel::Warning, "STATS", static_cast<int>(i),
+                    "0.0 fps (no frames reach inference)");
+        }
     }
     return G_SOURCE_CONTINUE;
 }

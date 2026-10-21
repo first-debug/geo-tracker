@@ -91,16 +91,14 @@ rtspsrc ─► rtph264depay ─► nvv4l2decoder ─► [nvvideoconvert flip-met
 
 ## Журнал
 
-Всё пишется в stdout/stderr с построчной буферизацией.
+Журнал ведёт `log.cpp`: у каждой строки есть время, уровень и компонент, у записей
+про камеру ещё и номер камеры. `debug`/`info` идут в stdout, `warning`/`error` — в
+stderr, можно дописывать в файл с ротацией и переключить формат на JSON (`[logging]`).
+Сообщения через `g_print`/`g_printerr` тоже попадают в журнал. Формат записей и
+список компонентов — [monitoring.md](monitoring.md).
 
-| Префикс | Что значит |
-| :--- | :--- |
-| `[CALIB] camera N: inliers a/b, reprojection error median … m, p90 … m, max … m` | Качество калибровки камеры, при старте |
-| `[STATS] camera N: X fps, Y objects/frame` | Раз в 5 с. `(no frames reach inference)` — от камеры нет кадров |
-| `[RTSP] camera N: …` | Обрыв, переподключение, восстановление потока |
-| `[PROBE] …` | Установка пробы, пропуск кадра без калибровки |
-| `Error in source-bin-N (…)` | Ошибка камеры, после неё — переподключение |
-| `Error from …` | Ошибка вне камер, приложение завершается |
+Метрики Prometheus отдаёт `metrics.cpp` (`[metrics]`): страница собирается в главном
+цикле раз в секунду, отдельный поток только раздаёт готовый текст.
 
 ## Исходники
 
@@ -111,6 +109,9 @@ rtspsrc ─► rtph264depay ─► nvv4l2decoder ─► [nvvideoconvert flip-met
 | `custom_bins.cpp/.hpp` | `source-bin` камеры (RTSP, декодер, поворот, nvdewarper) и `sink-bin` видеовыхода |
 | `callbacks.cpp/.hpp` | Подключение динамических падов `rtspsrc` к депакетайзеру |
 | `source_manager.cpp/.hpp` | Сторож камер: обнаружение зависания, переподключение, EOS при остановке |
+| `health.cpp/.hpp` | Heartbeat-файл для Docker HEALTHCHECK, сторож зависания главного цикла и отсутствия кадров |
+| `log.cpp/.hpp` | Журнал: уровни, компоненты, формат text/json, файл с ротацией, перехват `g_print` |
+| `metrics.cpp/.hpp` | HTTP-эндпоинт `/metrics` в формате Prometheus |
 | `bus_call.cpp/.hpp` | Обработка сообщений шины: ошибки камер — в переподключение, остальные — выход |
 | `probers.cpp/.hpp` | Проба: фильтр рамок, перевод в координаты, передача в `PointsSender`, разметка, статистика |
 | `pixel_transformer.cpp/.hpp` | Гомография пиксели → WGS84 в локальной метрической системе |

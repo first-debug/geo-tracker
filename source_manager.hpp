@@ -17,6 +17,12 @@
  * Остальные камеры в это время работают: nvstreammux собирает пачки без неё.
  * Номер камеры (вход nvstreammux) при перезапуске не меняется, поэтому
  * camera_id и калибровка остаются прежними.
+ *
+ * В журнал (компонент CAMERA) пишутся события для оповещения:
+ *  - error "camera lost" — первый сбой камеры, которая до этого работала
+ *    (или не подключилась при старте);
+ *  - warn — каждая следующая неудачная попытка;
+ *  - info "camera restored" — пошли кадры, с длительностью простоя.
  */
 
 struct SourceManager;
@@ -35,6 +41,10 @@ struct SourceSlot {
     std::atomic<gint64> last_buffer_us{0};
     // сколько раз подряд камера отваливалась, обнуляется при первом кадре
     guint failures = 0;
+    // когда камера пропала (первый сбой подряд), для длительности простоя
+    gint64 lost_since_us = 0;
+    // все перезапуски с начала работы, для метрик
+    guint64 restarts_total = 0;
 };
 
 struct SourceManager {
@@ -56,6 +66,10 @@ void source_manager_on_error(SourceManager &manager, GstElement *bin, const gcha
 // Перед отправкой EOS при остановке: EOS от камер больше не отбрасывается,
 // а за остановленные камеры EOS отправляется прямо в nvstreammux.
 void source_manager_shutdown(SourceManager &manager);
+
+// Камера работает и кадр от неё был не дольше stall_timeout_sec назад.
+// Только для главного цикла.
+bool source_manager_is_receiving(const SourceManager &manager, const SourceSlot &slot, gint64 now_us);
 
 // Таймер главного цикла (раз в секунду), user_data — SourceManager:
 // останавливает зависшие камеры и запускает остановленные.

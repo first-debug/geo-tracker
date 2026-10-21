@@ -31,7 +31,6 @@ struct HealthMonitor {
     guint no_frames_restart_sec = 300;
 
     SourceManager *sources = NULL;
-    guint stall_timeout_sec = 10;
 
     // штатная остановка приложения при отсутствии кадров
     void (*on_fatal)(gpointer) = NULL;

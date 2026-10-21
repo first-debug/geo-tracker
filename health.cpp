@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "health.hpp"
+#include "log.hpp"
 
 static const guint HEARTBEAT_INTERVAL_SEC = 2;
 static const gint64 US_PER_SEC = 1000000;
@@ -19,7 +20,7 @@ static GstPadProbeReturn frame_probe(GstPad *, GstPadProbeInfo *, gpointer user_
 void health_attach(HealthMonitor &health, GstElement *analytics_tail) {
     GstPad *pad = gst_element_get_static_pad(analytics_tail, "src");
     if (pad == NULL) {
-        g_printerr("[HEALTH] Cannot get src pad of %s\n", GST_ELEMENT_NAME(analytics_tail));
+        LOG_ERROR("HEALTH", "cannot get src pad of %s", GST_ELEMENT_NAME(analytics_tail));
         return;
     }
     gst_pad_add_probe(pad, GST_PAD_PROBE_TYPE_BUFFER, frame_probe, &health, NULL);
@@ -34,9 +35,7 @@ static void write_heartbeat(HealthMonitor &health, gint64 now) {
     if (health.sources != NULL) {
         for (const auto &slot : health.sources->slots) {
             total++;
-            gint64 last = slot->last_buffer_us;
-            if (slot->state == SourceSlot::State::Running && last != 0 &&
-                    now - last < (gint64)health.stall_timeout_sec * US_PER_SEC) {
+            if (source_manager_is_receiving(*health.sources, *slot, now)) {
                 receiving++;
             }
         }
@@ -56,7 +55,7 @@ static void write_heartbeat(HealthMonitor &health, gint64 now) {
     // поэтому healthcheck никогда не прочитает файл наполовину
     GError *err = NULL;
     if (!g_file_set_contents(health.heartbeat_file.c_str(), contents, -1, &err)) {
-        g_printerr("[HEALTH] Cannot write %s: %s\n", health.heartbeat_file.c_str(), err->message);
+        LOG_ERROR("HEALTH", "cannot write %s: %s", health.heartbeat_file.c_str(), err->message);
         g_error_free(err);
     }
     g_free(contents);
@@ -75,7 +74,7 @@ static gboolean health_tick(gpointer user_data) {
         gint64 last_frame = health.last_frame_us;
         gint64 since = last_frame ? last_frame : health.started_us;
         if (now - since > (gint64)health.no_frames_restart_sec * US_PER_SEC) {
-            g_printerr("[HEALTH] No frames processed for %u s, restarting the application.\n",
+            LOG_ERROR("HEALTH", "no frames processed for %u s, restarting the application",
                     health.no_frames_restart_sec);
             health.failed = true;
             if (health.on_fatal != NULL) {
@@ -93,6 +92,7 @@ static void watchdog_loop(HealthMonitor *health) {
     while (!health->cv.wait_for(lock, std::chrono::seconds(1), [health] { return health->stopping; })) {
         gint64 silence = g_get_monotonic_time() - health->last_tick_us;
         if (silence > (gint64)health->hang_timeout_sec * US_PER_SEC) {
+            // Мимо журнала: зависший главный цикл может держать его мьютекс
             fprintf(stderr, "[HEALTH] Main loop is not responding for %u s, exiting.\n",
                     health->hang_timeout_sec);
             fflush(stderr);

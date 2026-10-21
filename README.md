@@ -19,6 +19,7 @@
 | [docs/calibration.md](docs/calibration.md) | Калибровка камер: формат CSV, как считается гомография, проверка |
 | [docs/output-format.md](docs/output-format.md) | Формат UDP-сообщений (protobuf), пакетная отправка, приёмник |
 | [docs/deploy.md](docs/deploy.md) | Развёртывание и эксплуатация |
+| [docs/monitoring.md](docs/monitoring.md) | Журнал, события камер, метрики Prometheus |
 
 ## Быстрый старт
 
@@ -61,6 +62,8 @@
 получатель UDP, видеовыход, трекер, переподключение RTSP, пороги.
 При старте программа печатает ошибку репроекции калибровки по каждой камере
 (`[CALIB] ...`), затем раз в 5 секунд — fps и число объектов по камерам (`[STATS] ...`).
+Журнал и метрики Prometheus настраиваются в `[logging]` и `[metrics]`
+([monitoring.md](docs/monitoring.md)).
 
 Остановка — `Ctrl+C`, `SIGTERM` или `docker compose down`: приложение отправляет EOS и
 корректно закрывает выходные потоки. Повторный сигнал завершает процесс сразу.

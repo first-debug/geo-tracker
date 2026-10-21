@@ -9,6 +9,16 @@
 #include "pixel_transformer.hpp"
 #include "points_sender.hpp"
 
+struct StreamCounters {
+    // кадры и объекты на выходе анализа
+    std::atomic<guint64> frames{0};
+    std::atomic<guint64> objects{0};
+    // задержка обработки: от прихода кадра в nvstreammux (ntp_timestamp)
+    // до выхода из анализа; сумма в микросекундах и число замеров
+    std::atomic<guint64> latency_sum_us{0};
+    std::atomic<guint64> latency_count{0};
+};
+
 struct pgie_probe_data {
     PointsSender *sender = nullptr;
     // гомография для каждой камеры, индекс — номер входа nvstreammux (pad_index)
@@ -16,16 +26,23 @@ struct pgie_probe_data {
     // минимальное отношение ширины bbox к высоте
     double min_aspect_ratio = 1.2;
 
-    // Счётчики для периодической статистики, по одному на камеру.
-    // Пишутся из потока конвейера, читаются и обнуляются таймером в главном цикле.
+    // Счётчики с начала работы, по одному набору на камеру. Пишутся из потока
+    // конвейера, читаются таймером статистики и метриками в главном цикле.
     size_t num_streams = 0;
-    std::unique_ptr<std::atomic<guint64>[]> frames;
-    std::unique_ptr<std::atomic<guint64>[]> objects;
+    std::unique_ptr<StreamCounters[]> counters;
+
+    // Только для главного цикла: значения счётчиков на прошлом выводе
+    // статистики и fps за последний интервал.
+    std::vector<guint64> last_frames;
+    std::vector<guint64> last_objects;
+    std::vector<double> fps;
 
     void init_stats(size_t streams) {
         num_streams = streams;
-        frames.reset(new std::atomic<guint64>[streams]());
-        objects.reset(new std::atomic<guint64>[streams]());
+        counters.reset(new StreamCounters[streams]);
+        last_frames.assign(streams, 0);
+        last_objects.assign(streams, 0);
+        fps.assign(streams, 0.0);
     }
 };
 

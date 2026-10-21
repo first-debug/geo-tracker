@@ -160,9 +160,21 @@ APP_VERSION=<старый тег> docker compose up -d
 | `GST_DEBUG` | `1` | Логи GStreamer: `1` — ошибки, `2` — и предупреждения, `3`+ — для отладки. |
 | `TZ` | `Europe/Moscow` | Часовой пояс в логах. |
 
-## Логи
+## Логи и метрики
 
 Логи пишет Docker (`docker compose logs`), ротация: 5 файлов по 50 МБ.
+Формат строк, события пропажи камер и метрики Prometheus описаны в
+[monitoring.md](monitoring.md). Быстро найти проблемы с камерами:
+
+```
+docker compose logs app | grep -E 'ERROR|WARN'
+docker compose logs app | grep '\[CAMERA\]'
+```
+
+Метрики включаются секцией `[metrics]` в `app.ini`. Контейнер работает в сети
+хоста, поэтому порт (`9464` по умолчанию) открыт на сервере без проброса:
+`curl http://localhost:9464/metrics`. Если сервер доступен извне, закройте порт
+файрволом или задайте `bind-address=127.0.0.1`.
 Предупреждения v4l2 `Could not probe minimum capture size` при старте
 безвредны и при `GST_DEBUG=1` не выводятся.
 
