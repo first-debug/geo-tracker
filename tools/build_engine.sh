@@ -87,6 +87,20 @@ MODE="${MODE:-0}"
 [ -n "${ENGINE}" ] || fail "model-engine-file is not set in ${CONFIG}"
 [ -z "${CUSTOM_LIB}" ] || [ -f "${CUSTOM_LIB}" ] || fail "custom-lib-path ${CUSTOM_LIB} not found"
 
+# Файлы, без которых nvinfer не запустится. Проверяются при каждом вызове, даже
+# если engine свежий: entrypoint.sh вызывает скрипт перед каждым стартом.
+[ -n "${LABELS}" ] || fail "labelfile-path is not set in ${CONFIG}"
+[ -f "${LABELS}" ] || fail "labels ${LABELS} not found: export_yolo26.py creates labels.txt" \
+    "in the folder it is run from, see docs/model.md"
+CLASSES="$(ini_value "${CONFIG}" num-detected-classes)"
+LABEL_COUNT="$(grep -c '[^[:space:]]' "${LABELS}" || true)"
+if [ -n "${CLASSES}" ] && [ "${LABEL_COUNT}" != "${CLASSES}" ]; then
+    fail "${LABELS} has ${LABEL_COUNT} labels, but num-detected-classes=${CLASSES} in ${CONFIG}"
+fi
+if [ "${MODE}" = 1 ] && [ -n "${CALIB}" ] && [ ! -f "${CALIB}" ]; then
+    fail "int8-calib-file ${CALIB} not found (network-mode=1)"
+fi
+
 ENGINE_DIR="$(dirname "${ENGINE}")"
 STAMP="${ENGINE}.stamp"
 mkdir -p "${ENGINE_DIR}"

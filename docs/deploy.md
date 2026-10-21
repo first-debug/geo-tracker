@@ -188,6 +188,7 @@ APP_VERSION=<старый тег> docker compose up -d
 | `config /app/configs/app.ini not found` | Не смонтирована `configs/` или в ней нет `app.ini`: запускайте `docker compose` из корня репозитория. |
 | `custom-lib-path ... not found` | В `config_infer_primary_yolo.txt` путь к парсеру из среды разработки, нужен путь из раздела «Подготовка». |
 | `[engine] onnx ... not found` | В `models/` нет ONNX-модели, на которую ссылается `onnx-file`. |
+| `[engine] labels ... not found` / `... has N labels, but num-detected-classes=M` | Нет `labels.txt` из `labelfile-path` или число строк в нём не совпадает с `num-detected-classes`: `labels.txt` создаёт `export_yolo26.py` вместе с ONNX. |
 | `TensorRT engine was not built` | Ошибка сборки engine: причина — в строках `nvinfer` и `[engine]` выше в логе. Частые случаи — повреждённый ONNX или нехватка памяти GPU. |
 | `/app/models is not writable` | У папки `models/` на хосте нет прав на запись. |
 | `no such element factory "nvstreammux"` / `"nvinfer"` | Плагины DeepStream не загрузились. В образах до исправления кэш реестра GStreamer оставался со сборки без GPU — пересоберите образ. Если ошибка осталась, контейнер не видит GPU: проверьте `docker compose run --rm --entrypoint nvidia-smi app`, затем `docker compose run --rm --entrypoint gst-inspect-1.0 app nvinfer` — в выводе будет причина, по которой плагин не загрузился. |
