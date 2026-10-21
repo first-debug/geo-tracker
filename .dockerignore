@@ -1,0 +1,15 @@
+# В образ попадают только исходники и Makefile; конфиги и модели монтируются.
+.git
+.vscode
+.clangd
+.env
+.venv
+build/
+graphs/
+media/
+models/
+configs/
+docs/
+*.log
+*.diff
+docker-compose.yml

@@ -1,4 +1,7 @@
 .vscode/
+.venv/
+__pycache__/
+
 build/
 media/
 graphs/
@@ -7,7 +10,14 @@ models/*
 
 # Настоящие конфиги с адресами и калибровкой не хранятся в git,
 # в репозитории лежат только шаблоны *.example
-configs/app.ini
+configs/app*.ini
 configs/config_infer_primary_yolo.txt
 configs/warper*.toml
 configs/calibration/*.csv
+
+
+# локальные настройки для docker compose
+.env
+
+# код protobuf для tools/udp_receiver.py генерируется локально
+tools/*_pb2.py

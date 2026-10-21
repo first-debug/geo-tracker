@@ -1,0 +1,3 @@
+# Скрипты запускаются в Linux-контейнере: CRLF из Windows ломает shebang
+*.sh text eol=lf
+docker/Dockerfile text eol=lf
