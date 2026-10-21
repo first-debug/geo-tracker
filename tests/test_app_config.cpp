@@ -112,6 +112,7 @@ TEST("app_config: minimal config gets defaults for optional sections") {
     CHECK_EQ(c.no_frames_restart_sec, 300);
     CHECK_NEAR(c.ransac_threshold_m, 10.0, 1e-12);
     CHECK_NEAR(c.min_aspect_ratio, 1.2, 1e-12);
+    CHECK(c.zone_file.empty());
     CHECK_EQ(c.tracker_enabled, false);
 
     REQUIRE_EQ(c.cameras.size(), size_t(1));
@@ -140,6 +141,36 @@ TEST("app_config: relative paths are resolved from the config folder") {
     CHECK_EQ(r.config.tracker_config, dir + "/tracker.yml");
     CHECK_EQ(r.config.cameras[0].calibration_file, dir + "/calibration/camera0.csv");
     CHECK_EQ(r.config.cameras[0].dewarper_config, dir + "/warper.toml");
+}
+
+TEST("app_config: [geo] zone is resolved from the config folder") {
+    Loaded r = load(kMinimal + "[geo]\nzone=zones/apron.csv\n");
+    REQUIRE(r.ok);
+    std::string dir = r.path.substr(0, r.path.rfind('/'));
+    CHECK_EQ(r.config.zone_file, dir + "/zones/apron.csv");
+
+    Loaded abs = load(kMinimal + "[geo]\nzone=/etc/sheremetevo/zone.csv\n");
+    REQUIRE(abs.ok);
+    CHECK_EQ(abs.config.zone_file, std::string("/etc/sheremetevo/zone.csv"));
+}
+
+TEST("app_config: camera zone overrides [geo] zone, empty value disables it") {
+    std::string ini = kMinimal +
+        "[geo]\nzone=common.csv\n"
+        "[camera1]\nuri=rtsp://cam/1\ncalibration=c1.csv\nzone=zones/cam1.csv\n"
+        "[camera2]\nuri=rtsp://cam/2\ncalibration=c2.csv\nzone=\n";
+    Loaded r = load(ini);
+    REQUIRE(r.ok);
+    REQUIRE_EQ(r.config.cameras.size(), size_t(3));
+    std::string dir = r.path.substr(0, r.path.rfind('/'));
+    CHECK_EQ(r.config.cameras[0].zone_file, dir + "/common.csv");
+    CHECK_EQ(r.config.cameras[1].zone_file, dir + "/zones/cam1.csv");
+    CHECK(r.config.cameras[2].zone_file.empty());
+
+    // без [geo] zone у камеры без своего ключа фильтра нет
+    Loaded none = load(kMinimal);
+    REQUIRE(none.ok);
+    CHECK(none.config.cameras[0].zone_file.empty());
 }
 
 TEST("app_config: empty heartbeat-file disables heartbeat") {

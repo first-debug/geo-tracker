@@ -103,7 +103,7 @@ TEST_DIR:= $(BUILD_DIR)/tests
 TEST_BIN:= $(TEST_DIR)/run-tests
 TEST_PKGS:= glib-2.0 opencv4 protobuf
 # код приложения, который покрывают тесты
-TEST_APP_SRCS:= app_config.cpp log.cpp pixel_transformer.cpp points_sender.cpp udp_connection.cpp
+TEST_APP_SRCS:= app_config.cpp geo_zone.cpp log.cpp pixel_transformer.cpp points_sender.cpp udp_connection.cpp
 TEST_SRCS:= $(wildcard tests/*.cpp)
 TEST_OBJS:= $(addprefix $(TEST_DIR)/, $(notdir $(TEST_APP_SRCS:.cpp=.o) $(TEST_SRCS:.cpp=.o))) \
 			$(TEST_DIR)/points.pb.o

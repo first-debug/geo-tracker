@@ -175,3 +175,83 @@ TEST("pixel_transformer: degenerate (collinear) points are an error") {
     }
     CHECK_THROWS_AS(PixelGeoTransformer(pixels, geo), std::runtime_error);
 }
+
+// ---------------------------------------------------------------------------
+// горизонт
+// ---------------------------------------------------------------------------
+
+// У эталонной камеры w = 0.0004·y + 1: горизонт на y = -2500, над ним
+// (y < -2500) w < 0 и точка «отражается» за спину камеры. На калибровочной
+// сетке (y = 200..2600) наименьший w = 1.08, порог 0.108 -> y ≈ -2230.
+
+TEST("pixel_transformer: far but valid points below the horizon are kept") {
+    std::vector<cv::Point2d> pixels, geo;
+    make_grid(pixels, geo);
+    PixelGeoTransformer t(pixels, geo);
+
+    // ~5 км, в 9 раз дальше калибровочной зоны: ещё принимается
+    auto g = t.pixel_to_geo(800, -2000);
+    REQUIRE(g.has_value());
+    cv::Point2d expected = true_geo(800, -2000);
+    CHECK_LT(distance_m(g->first, g->second, expected.x, expected.y), 1.0);
+}
+
+TEST("pixel_transformer: points at and above the horizon are rejected") {
+    std::vector<cv::Point2d> pixels, geo;
+    make_grid(pixels, geo);
+    PixelGeoTransformer t(pixels, geo);
+
+    // у горизонта (сотни км), на нём (деление на ноль) и над ним:
+    // -2510 и -3000 без фильтра дают «правдоподобные» точки за камерой
+    for (double y : {-2300.0, -2490.0, -2500.0, -2510.0, -3000.0, -10000.0}) {
+        CHECK(!t.pixel_to_geo(800, y).has_value());
+    }
+    CHECK(t.batch_pixel_to_geo({{800, 200}, {800, -3000}, {800, 2600}}).size() == 2);
+}
+
+TEST("pixel_transformer: horizon side is learnt from calibration, not assumed") {
+    // Камера, у которой после нормализации w на земле отрицательный:
+    // w' = 1 - 0.001·y, горизонт на y = 1000, земля ниже (y > 1000)
+    const double kH2[9] = {
+        0.25,  0.02,  -150.0,
+        0.01, -0.30,   400.0,
+        0.0,  -0.001,  1.0,
+    };
+    auto geo_of = [&](double x, double y) {
+        double w = kH2[6] * x + kH2[7] * y + kH2[8];
+        double east = (kH2[0] * x + kH2[1] * y + kH2[2]) / w;
+        double north = (kH2[3] * x + kH2[4] * y + kH2[5]) / w;
+        return cv::Point2d(kLng0 + east / m_per_deg_lng(kLat0), kLat0 + north / m_per_deg_lat(kLat0));
+    };
+    std::vector<cv::Point2d> pixels, geo;
+    for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 5; j++) {
+            double x = 100 + i * 380, y = 1300 + j * 350;
+            pixels.emplace_back(x, y);
+            geo.push_back(geo_of(x, y));
+        }
+    }
+    PixelGeoTransformer t(pixels, geo);
+    CHECK_LT(t.reprojection_stats().max_m, 0.01);
+
+    // земля: калибровочная точка и точка дальше калибровки
+    CHECK(t.pixel_to_geo(800, 1300).has_value());
+    CHECK(t.pixel_to_geo(800, 1100).has_value());
+    // горизонт и небо
+    CHECK(!t.pixel_to_geo(800, 1000).has_value());
+    CHECK(!t.pixel_to_geo(800, 900).has_value());
+    CHECK(!t.pixel_to_geo(800, 0).has_value());
+}
+
+TEST("pixel_transformer: outlier beyond the horizon does not break the filter") {
+    std::vector<cv::Point2d> pixels, geo;
+    make_grid(pixels, geo);
+    // ошибочная калибровочная точка в «небе» с координатами из рабочей зоны
+    pixels.emplace_back(800, -3000);
+    geo.push_back(true_geo(800, 1000));
+
+    PixelGeoTransformer t(pixels, geo, 10.0);
+    CHECK_EQ(t.reprojection_stats().inliers, pixels.size() - 1);
+    CHECK(t.pixel_to_geo(800, 200).has_value());
+    CHECK(!t.pixel_to_geo(800, -3000).has_value());
+}
