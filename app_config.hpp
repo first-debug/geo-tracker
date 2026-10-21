@@ -15,6 +15,9 @@ struct CameraConfig {
     std::string dewarper_config;
     // CSV с калибровочными точками: pixel_x,pixel_y,lng,lat
     std::string calibration_file;
+    // CSV с вершинами зоны камеры (lng,lat); если ключа zone в группе камеры
+    // нет — берётся общая [geo] zone, пустая строка — без фильтра по зоне
+    std::string zone_file;
 };
 
 struct AppConfig {
@@ -45,6 +48,8 @@ struct AppConfig {
     double ransac_threshold_m = 10.0;
     // минимальное отношение ширины bbox к высоте, чтобы объект считался самолётом
     double min_aspect_ratio = 1.2;
+    // общая зона для камер без своего ключа zone (см. CameraConfig::zone_file)
+    std::string zone_file;
 
     // порядок камер задаёт camera_id: [camera0], [camera1], ...
     std::vector<CameraConfig> cameras;

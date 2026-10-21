@@ -121,6 +121,20 @@ int main(int argc, char *argv[]) {
                 cam, st.inliers, st.points, st.median_m, st.p90_m, st.max_m);
     }
 
+    probe_data.zones.resize(num_sources);
+    for (int cam = 0; cam < num_sources; cam++) {
+        const std::string &zone_file = config.cameras[cam].zone_file;
+        if (zone_file.empty()) {
+            continue;
+        }
+        if (!load_geo_zone(zone_file, probe_data.zones[cam], error)) {
+            g_printerr("Zone of camera %d failed: %s\n", cam, error.c_str());
+            return -1;
+        }
+        g_print("[ZONE] camera %d: %zu vertices, area %.0f m2; points outside are not sent\n",
+                cam, probe_data.zones[cam].vertex_count(), probe_data.zones[cam].area_m2());
+    }
+
     loop = g_main_loop_new(NULL, FALSE);
 
     // Elements initialization

@@ -100,6 +100,7 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
             !get_int(kf, "udp", "max-datagram-bytes", config.udp_max_datagram_bytes, error) ||
             !get_double(kf, "geo", "ransac-threshold-m", config.ransac_threshold_m, error) ||
             !get_double(kf, "geo", "min-aspect-ratio", config.min_aspect_ratio, error) ||
+            !get_string(kf, "geo", "zone", false, config.zone_file, error) ||
             !get_int(kf, "rtsp", "stall-timeout-sec", config.stall_timeout_sec, error) ||
             !get_int(kf, "rtsp", "reconnect-interval-sec", config.reconnect_interval_sec, error) ||
             !get_string(kf, "health", "heartbeat-file", false, config.heartbeat_file, error) ||
@@ -138,6 +139,7 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
         return false;
     }
 
+    config.zone_file = resolve_path(base_dir, config.zone_file);
     config.nvinfer_config = resolve_path(base_dir, config.nvinfer_config);
     config.heartbeat_file = resolve_path(base_dir, config.heartbeat_file);
 
@@ -205,6 +207,15 @@ bool parse_config(GKeyFile *kf, const std::string &base_dir, AppConfig &config, 
         }
         camera.dewarper_config = resolve_path(base_dir, camera.dewarper_config);
         camera.calibration_file = resolve_path(base_dir, camera.calibration_file);
+        // zone= с пустым значением отключает общую зону для этой камеры
+        if (g_key_file_has_key(kf, group, "zone", NULL)) {
+            if (!get_string(kf, group, "zone", false, camera.zone_file, error)) {
+                return false;
+            }
+            camera.zone_file = resolve_path(base_dir, camera.zone_file);
+        } else {
+            camera.zone_file = config.zone_file;
+        }
         config.cameras.push_back(camera);
     }
 

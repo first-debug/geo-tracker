@@ -47,6 +47,11 @@ max-datagram-bytes=1400
 ransac-threshold-m=10
 # минимальное отношение ширины bbox к высоте
 min-aspect-ratio=1.2
+# CSV с вершинами зоны (lng,lat), в которой ожидаются объекты; точки вне
+# зоны не отправляются. Общая для всех камер, у камеры можно задать свою
+# в [cameraN] zone=. Без параметра фильтра по зоне нет.
+# Шаблон: configs/zone.csv.example
+#zone=zone.csv
 
 [tracker]
 # true — добавить nvtracker: у объектов появится постоянный object_id;
@@ -72,6 +77,8 @@ uri=rtsp://<camera-host>:8554/camera0
 flip-method=1
 dewarper-config=warper.toml
 calibration=calibration/camera0.csv
+# своя зона камеры вместо [geo] zone; пустое значение — без фильтра по зоне
+#zone=zones/camera0.csv
 
 [camera1]
 uri=rtsp://<camera-host>:8554/camera1
