@@ -21,7 +21,8 @@
 | Файл | Назначение |
 | :--- | :--- |
 | `docker/Dockerfile` | Двухстадийная сборка: в первой стадии компилируются приложение и парсер DeepStream-Yolo, во второй остаются только они и нужные для работы библиотеки. |
-| `docker/entrypoint.sh` | Проверяет конфиги и модель перед стартом и запускает приложение. |
+| `docker/entrypoint.sh` | Проверяет конфиги, при необходимости строит TensorRT engine и запускает приложение. |
+| `tools/build_engine.sh` | Сборка TensorRT engine; в образе — `/app/build_engine.sh`. |
 | `docker/healthcheck.sh` | Docker HEALTHCHECK по heartbeat-файлу приложения. |
 | `docker/runtime-deps.sh` | Находит системные пакеты, нужные собранным файлам, чтобы поставить их в итоговый образ. |
 | `docker-compose.yml` | Запуск: GPU, сеть хоста, автоперезапуск, тома, ротация логов. |
@@ -117,19 +118,33 @@ Docker сам не перезапускает контейнер со стату
 ## TensorRT engine
 
 Engine зависит от модели GPU, версии TensorRT и размера пачки (`batch-size`,
-равен числу камер). Если файла из `model-engine-file` нет, nvinfer строит
-engine из ONNX при первом запуске: это занимает несколько минут, в логе
-будет строка `TensorRT engine ... not found, it will be built`. Готовый
-engine сохраняется в `models/` на хосте, следующие запуски стартуют сразу.
+равен числу камер), поэтому в образ он не входит: при `docker build` GPU нет.
+Его строит `entrypoint.sh` перед запуском приложения скриптом
+`/app/build_engine.sh` (подробно — [model.md](model.md#3-tensorrt-engine)):
 
-Удалите engine из `models/` и проверьте имя в `model-engine-file`, если:
+- если файла из `model-engine-file` нет, он строится из ONNX, это несколько
+  минут; в логе строки `[engine] building TensorRT engine ...` и
+  `[engine] ... built in N s`;
+- рядом сохраняется `<engine>.stamp`. При следующих стартах скрипт сверяет хэш
+  ONNX, версию TensorRT, GPU, `batch-size` и `network-mode` и пересобирает engine,
+  если что-то поменялось, например после замены ONNX или обновления образа
+  DeepStream. Если ничего не поменялось, проверка занимает около секунды;
+- если сборка не удалась, контейнер завершается с ошибкой
+  `TensorRT engine was not built`, старый engine при этом не трогается.
 
-- поменялась ONNX-модель;
-- поменялось число камер (`batch-size`) или точность (`network-mode`);
-- сервер получил другую GPU, или обновился образ DeepStream или драйвер.
+Engine хранится в `models/` на хосте и переживает пересоздание контейнера.
+Engine, построенный на машине разработчика, на сервер не переносится: на другой
+GPU скрипт его всё равно пересоберёт.
 
-Engine, построенный на машине разработчика, на сервер не переносится:
-он собирается под конкретную GPU.
+Построить engine заранее, не запуская приложение (например, после обновления
+образа, чтобы сократить простой):
+
+```
+docker compose run --rm --entrypoint /app/build_engine.sh app /app/configs/config_infer_primary_yolo.txt
+```
+
+Построить заново в любом случае (например, после смены `DSYOLO_REF`) — добавьте
+`--force` перед путём к конфигу.
 
 ## Обновление и откат
 
@@ -172,7 +187,9 @@ APP_VERSION=<старый тег> docker compose up -d
 | :--- | :--- |
 | `config /app/configs/app.ini not found` | Не смонтирована `configs/` или в ней нет `app.ini`: запускайте `docker compose` из корня репозитория. |
 | `custom-lib-path ... not found` | В `config_infer_primary_yolo.txt` путь к парсеру из среды разработки, нужен путь из раздела «Подготовка». |
-| `neither engine ... nor onnx ... found` | В `models/` нет ONNX-модели. |
+| `[engine] onnx ... not found` | В `models/` нет ONNX-модели, на которую ссылается `onnx-file`. |
+| `[engine] labels ... not found` / `... has N labels, but num-detected-classes=M` | Нет `labels.txt` из `labelfile-path` или число строк в нём не совпадает с `num-detected-classes`: `labels.txt` создаёт `export_yolo26.py` вместе с ONNX. |
+| `TensorRT engine was not built` | Ошибка сборки engine: причина — в строках `nvinfer` и `[engine]` выше в логе. Частые случаи — повреждённый ONNX или нехватка памяти GPU. |
 | `/app/models is not writable` | У папки `models/` на хосте нет прав на запись. |
 | `no such element factory "nvstreammux"` / `"nvinfer"` | Плагины DeepStream не загрузились. В образах до исправления кэш реестра GStreamer оставался со сборки без GPU — пересоберите образ. Если ошибка осталась, контейнер не видит GPU: проверьте `docker compose run --rm --entrypoint nvidia-smi app`, затем `docker compose run --rm --entrypoint gst-inspect-1.0 app nvinfer` — в выводе будет причина, по которой плагин не загрузился. |
 | `could not select device driver "nvidia"` | Не установлен или не настроен NVIDIA Container Toolkit. |

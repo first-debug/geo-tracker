@@ -8,6 +8,7 @@ BUILD_DIR:= build
 CONFIGS_DIR:= configs
 GRAPHS_DIR:= graphs
 GEN_DIR:= $(BUILD_DIR)/gen
+NVINFER_CONFIG?= $(CONFIGS_DIR)/config_infer_primary_yolo.txt
 
 TARGET:= $(BUILD_DIR)/$(APP)
 
@@ -40,7 +41,7 @@ LIBS:= $(shell pkg-config --libs $(PKGS)) \
 		-Wl,-rpath,$(LIB_INSTALL_DIR) \
 		-pthread
 
-.PHONY: all run install clean test
+.PHONY: all run install clean test engine engine-rebuild
 
 all: $(TARGET)
 
@@ -79,6 +80,14 @@ $(BUILD_DIR)/%.o: %.cpp $(INCS) $(PROTO_HDRS) Makefile | $(BUILD_DIR)
 
 $(TARGET): $(BUILD_OBJS) $(PROTO_OBJS) Makefile | $(BUILD_DIR)
 	$(CXX) -o $@ $(BUILD_OBJS) $(PROTO_OBJS) $(LIBS)
+
+# TensorRT engine по model-engine-file из NVINFER_CONFIG. Строится, только если
+# его нет или поменялись ONNX, GPU, TensorRT или параметры сборки (нужен GPU).
+engine:
+	bash tools/build_engine.sh $(NVINFER_CONFIG)
+
+engine-rebuild:
+	bash tools/build_engine.sh --force $(NVINFER_CONFIG)
 
 gen-graph: $(TARGET) | $(GRAPHS_DIR)
 	GST_DEBUG_DUMP_DOT_DIR=graphs $(MAKE) run-multi-src

@@ -52,10 +52,12 @@
 
    ```
    make
+   make engine          # TensorRT engine из ONNX: первый раз несколько минут
    ./build/sheremetevo-app configs/app.ini
    ```
 
-   Первый запуск строит TensorRT engine из ONNX, это занимает несколько минут.
+   `make engine` пересобирает engine, только если поменялись ONNX, GPU или параметры
+   ([model.md](docs/model.md#3-tensorrt-engine)); в Docker это делается при старте.
 
 Все настройки — в `configs/app.ini` ([справочник](docs/configuration.md)): камеры,
 получатель UDP, видеовыход, трекер, переподключение RTSP, пороги.

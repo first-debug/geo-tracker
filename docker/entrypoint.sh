@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Запуск sheremetevo-app в контейнере: проверяет смонтированные конфиги и
-# модель, чтобы ошибка была понятна сразу, а не из глубины DeepStream.
+# модель, чтобы ошибка была понятна сразу, а не из глубины DeepStream, и
+# заранее строит TensorRT engine (tools/build_engine.sh).
 set -euo pipefail
 
 CONFIG="${1:-/app/configs/app.ini}"
@@ -37,26 +38,20 @@ if [ -n "${custom_lib}" ] && [ ! -f "$(resolve "${NVINFER_CONFIG}" "${custom_lib
          "/opt/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so"
 fi
 
-onnx="$(ini_value "${NVINFER_CONFIG}" onnx-file)"
-engine="$(ini_value "${NVINFER_CONFIG}" model-engine-file)"
-engine_path=""
-[ -n "${engine}" ] && engine_path="$(resolve "${NVINFER_CONFIG}" "${engine}")"
-
-if [ -z "${engine_path}" ] || [ ! -f "${engine_path}" ]; then
-    [ -n "${onnx}" ] && [ -f "$(resolve "${NVINFER_CONFIG}" "${onnx}")" ] \
-        || fail "neither engine ${engine:-<not set>} nor onnx ${onnx:-<not set>} found: mount models/ to ${MODELS_DIR}"
-    echo "[entrypoint] TensorRT engine ${engine_path:-<not set>} not found," \
-         "it will be built from ${onnx}; the first start takes several minutes."
-fi
-
-# Построенный engine сохраняется в текущую папку, поэтому работаем из
-# смонтированной models/: при следующих запусках сборка не повторяется.
-[ -w "${MODELS_DIR}" ] || fail "${MODELS_DIR} is not writable: the TensorRT engine cache cannot be saved"
-cd "${MODELS_DIR}"
+[ -w "${MODELS_DIR}" ] || fail "${MODELS_DIR} is not writable: the TensorRT engine cannot be saved"
 
 # Кэш реестра GStreamer помнит плагины, которые не загрузились (например,
 # плагины DeepStream при запуске без GPU), и больше их не пробует. Сбрасываем
-# его на каждом старте: пересканирование занимает несколько секунд.
+# его на каждом старте, до сборки engine: пересканирование занимает несколько секунд.
 rm -rf "${HOME:-/root}/.cache/gstreamer-1.0"
+
+# Engine строится до старта приложения, если его нет или поменялись ONNX, GPU,
+# версия TensorRT или параметры сборки; иначе проверка занимает секунду.
+/app/build_engine.sh "${NVINFER_CONFIG}" \
+    || fail "TensorRT engine was not built, see [engine] messages above"
+
+# Если nvinfer всё же решит пересобрать engine (например, файл повреждён),
+# DeepStream-Yolo сохранит его в текущую папку: пусть это будет models/.
+cd "${MODELS_DIR}"
 
 exec /app/sheremetevo-app "${CONFIG}"
