@@ -45,7 +45,7 @@ bool inside(const GeoZone &z, double east, double north) {
 }
 
 std::string write_temp(const std::string &content) {
-    char tmpl[] = "/tmp/sheremetevo-zone-XXXXXX";
+    char tmpl[] = "/tmp/geotracker-zone-XXXXXX";
     int fd = mkstemp(tmpl);
     close(fd);
     std::ofstream(tmpl) << content;

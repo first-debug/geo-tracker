@@ -119,7 +119,7 @@ void handle_client(MetricsServer &metrics, int fd) {
         }
         respond(fd, "200 OK", "text/plain; version=0.0.4; charset=utf-8", page, head);
     } else if (path == "/") {
-        respond(fd, "200 OK", "text/plain; charset=utf-8", "sheremetevo-app: metrics at /metrics\n", head);
+        respond(fd, "200 OK", "text/plain; charset=utf-8", "geotracker: metrics at /metrics\n", head);
     } else {
         respond(fd, "404 Not Found", "text/plain", "not found\n", head);
     }
@@ -148,83 +148,83 @@ std::string metrics_render(const MetricsServer &metrics) {
     out.reserve(4096);
     const gint64 now = g_get_monotonic_time();
 
-    family(out, "sheremetevo_uptime_seconds", "gauge", "Seconds since the application started.");
-    sample(out, "sheremetevo_uptime_seconds", -1, "%.0f", (now - metrics.started_us) / 1e6);
+    family(out, "geo_tracker_uptime_seconds", "gauge", "Seconds since the application started.");
+    sample(out, "geo_tracker_uptime_seconds", -1, "%.0f", (now - metrics.started_us) / 1e6);
 
     if (metrics.sources != NULL) {
         const SourceManager &sources = *metrics.sources;
 
-        family(out, "sheremetevo_camera_up", "gauge",
+        family(out, "geo_tracker_camera_up", "gauge",
                 "1 if the camera delivers frames (a frame within [rtsp] stall-timeout-sec), else 0.");
         for (const auto &slot : sources.slots) {
-            sample(out, "sheremetevo_camera_up", static_cast<int>(slot->index), "%d",
+            sample(out, "geo_tracker_camera_up", static_cast<int>(slot->index), "%d",
                     source_manager_is_receiving(sources, *slot, now) ? 1 : 0);
         }
 
-        family(out, "sheremetevo_camera_last_frame_age_seconds", "gauge",
+        family(out, "geo_tracker_camera_last_frame_age_seconds", "gauge",
                 "Seconds since the last frame from the camera, -1 if there were no frames yet.");
         for (const auto &slot : sources.slots) {
             gint64 last = slot->last_buffer_us;
-            sample(out, "sheremetevo_camera_last_frame_age_seconds", static_cast<int>(slot->index), "%.1f",
+            sample(out, "geo_tracker_camera_last_frame_age_seconds", static_cast<int>(slot->index), "%.1f",
                     last ? (now - last) / 1e6 : -1.0);
         }
 
-        family(out, "sheremetevo_camera_restarts_total", "counter",
+        family(out, "geo_tracker_camera_restarts_total", "counter",
                 "Camera restarts after an error or a stall.");
         for (const auto &slot : sources.slots) {
-            sample(out, "sheremetevo_camera_restarts_total", static_cast<int>(slot->index),
+            sample(out, "geo_tracker_camera_restarts_total", static_cast<int>(slot->index),
                     "%" G_GUINT64_FORMAT, slot->restarts_total);
         }
 
-        family(out, "sheremetevo_camera_down_seconds", "gauge",
+        family(out, "geo_tracker_camera_down_seconds", "gauge",
                 "Seconds the camera has been down in the current outage, 0 if it works.");
         for (const auto &slot : sources.slots) {
             double down = slot->failures > 0 ? (now - slot->lost_since_us) / 1e6 : 0.0;
-            sample(out, "sheremetevo_camera_down_seconds", static_cast<int>(slot->index), "%.0f", down);
+            sample(out, "geo_tracker_camera_down_seconds", static_cast<int>(slot->index), "%.0f", down);
         }
     }
 
     if (metrics.probe != NULL && metrics.probe->counters) {
         const pgie_probe_data &probe = *metrics.probe;
 
-        family(out, "sheremetevo_camera_fps", "gauge",
+        family(out, "geo_tracker_camera_fps", "gauge",
                 "Frames per second at the analytics output over the last statistics interval (5 s).");
         for (size_t i = 0; i < probe.num_streams; i++) {
-            sample(out, "sheremetevo_camera_fps", static_cast<int>(i), "%.2f", probe.fps[i]);
+            sample(out, "geo_tracker_camera_fps", static_cast<int>(i), "%.2f", probe.fps[i]);
         }
 
-        family(out, "sheremetevo_camera_frames_total", "counter", "Frames processed by the analytics.");
+        family(out, "geo_tracker_camera_frames_total", "counter", "Frames processed by the analytics.");
         for (size_t i = 0; i < probe.num_streams; i++) {
-            sample(out, "sheremetevo_camera_frames_total", static_cast<int>(i),
+            sample(out, "geo_tracker_camera_frames_total", static_cast<int>(i),
                     "%" G_GUINT64_FORMAT, (guint64)probe.counters[i].frames);
         }
 
-        family(out, "sheremetevo_camera_objects_total", "counter", "Objects detected on processed frames.");
+        family(out, "geo_tracker_camera_objects_total", "counter", "Objects detected on processed frames.");
         for (size_t i = 0; i < probe.num_streams; i++) {
-            sample(out, "sheremetevo_camera_objects_total", static_cast<int>(i),
+            sample(out, "geo_tracker_camera_objects_total", static_cast<int>(i),
                     "%" G_GUINT64_FORMAT, (guint64)probe.counters[i].objects);
         }
 
-        family(out, "sheremetevo_camera_latency_seconds", "summary",
+        family(out, "geo_tracker_camera_latency_seconds", "summary",
                 "Time from frame arrival at nvstreammux to the end of analytics.");
         for (size_t i = 0; i < probe.num_streams; i++) {
-            sample(out, "sheremetevo_camera_latency_seconds_sum", static_cast<int>(i), "%.6f",
+            sample(out, "geo_tracker_camera_latency_seconds_sum", static_cast<int>(i), "%.6f",
                     probe.counters[i].latency_sum_us / 1e6);
-            sample(out, "sheremetevo_camera_latency_seconds_count", static_cast<int>(i),
+            sample(out, "geo_tracker_camera_latency_seconds_count", static_cast<int>(i),
                     "%" G_GUINT64_FORMAT, (guint64)probe.counters[i].latency_count);
         }
     }
 
     if (metrics.sender != NULL) {
-        family(out, "sheremetevo_udp_datagrams_sent_total", "counter", "UDP datagrams sent to the receiver.");
-        sample(out, "sheremetevo_udp_datagrams_sent_total", -1, "%" G_GUINT64_FORMAT,
+        family(out, "geo_tracker_udp_datagrams_sent_total", "counter", "UDP datagrams sent to the receiver.");
+        sample(out, "geo_tracker_udp_datagrams_sent_total", -1, "%" G_GUINT64_FORMAT,
                 (guint64)metrics.sender->datagrams_sent);
-        family(out, "sheremetevo_udp_send_errors_total", "counter", "UDP datagrams that failed to send.");
-        sample(out, "sheremetevo_udp_send_errors_total", -1, "%" G_GUINT64_FORMAT,
+        family(out, "geo_tracker_udp_send_errors_total", "counter", "UDP datagrams that failed to send.");
+        sample(out, "geo_tracker_udp_send_errors_total", -1, "%" G_GUINT64_FORMAT,
                 (guint64)metrics.sender->send_errors);
-        family(out, "sheremetevo_udp_frames_dropped_total", "counter",
+        family(out, "geo_tracker_udp_frames_dropped_total", "counter",
                 "Frames dropped because the send queue overflowed.");
-        sample(out, "sheremetevo_udp_frames_dropped_total", -1, "%" G_GUINT64_FORMAT,
+        sample(out, "geo_tracker_udp_frames_dropped_total", -1, "%" G_GUINT64_FORMAT,
                 (guint64)metrics.sender->frames_dropped);
     }
 

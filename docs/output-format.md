@@ -2,7 +2,7 @@
 
 Координаты объектов отправляются по UDP в двоичном формате
 [protobuf](https://protobuf.dev/) (proto3). Схема — [`proto/points.proto`](../proto/points.proto),
-пакет `sheremetevo`. Получатель задаётся в группе `[udp]` в `app.ini`
+пакет `geotracker`. Получатель задаётся в группе `[udp]` в `app.ini`
 (см. [configuration.md](configuration.md#udp)).
 
 ## Датаграмма

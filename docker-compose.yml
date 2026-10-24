@@ -1,10 +1,10 @@
-# Запуск sheremetevo-app на сервере с GPU NVIDIA.
+# Запуск geotracker на сервере с GPU NVIDIA.
 #   docker compose up -d --build   — собрать образ и запустить
 #   docker compose logs -f         — логи
 #   docker compose down            — остановить
 # Подробности — docs/deploy.md.
 
-name: sheremetevo
+name: geotracker
 
 services:
   app:
@@ -15,7 +15,7 @@ services:
         DS_IMAGE: ${DS_IMAGE:-nvcr.io/nvidia/deepstream:9.0-triton-multiarch}
         DSYOLO_REF: ${DSYOLO_REF:-master}
         GIT_SHA: ${GIT_SHA:-unknown}
-    image: sheremetevo-app:${APP_VERSION:-latest}
+    image: geotracker:${APP_VERSION:-latest}
     command: ["/app/configs/${APP_CONFIG:-app.ini}"]
     restart: unless-stopped
     # Камеры (RTSP/RTP), видеовыход и получатель UDP — в локальной сети;
@@ -34,7 +34,7 @@ services:
       TZ: ${TZ:-Europe/Moscow}
       # Пороги healthcheck; путь к heartbeat-файлу должен совпадать с
       # [health] heartbeat-file в app.ini
-      HEALTH_FILE: /tmp/sheremetevo-health
+      HEALTH_FILE: /tmp/geotracker-health
       HEALTH_MAX_FRAME_AGE_SEC: ${HEALTH_MAX_FRAME_AGE_SEC:-60}
     volumes:
       - ./configs:/app/configs:ro

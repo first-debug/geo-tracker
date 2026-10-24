@@ -66,7 +66,7 @@ struct AppConfig {
 
     // Контроль работоспособности (см. health.hpp): heartbeat-файл для
     // Docker HEALTHCHECK, пустая строка — не писать
-    std::string heartbeat_file = "/tmp/sheremetevo-health";
+    std::string heartbeat_file = "/tmp/geotracker-health";
     // главный цикл не отвечает дольше — аварийный выход, 0 — не следить
     int hang_timeout_sec = 60;
     // нет обработанных кадров ни с одной камеры дольше — перезапуск, 0 — никогда

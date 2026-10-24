@@ -3,7 +3,7 @@
 Приложение запускается с одним аргументом — путём к главному конфигу:
 
 ```
-./build/sheremetevo-app configs/app.ini
+./build/geotracker configs/app.ini
 ```
 
 Настоящие конфиги (`configs/app*.ini`, `configs/config_infer_primary_yolo.txt`,
@@ -60,7 +60,7 @@
 
 | Ключ | По умолчанию | Описание |
 | :--- | :--- | :--- |
-| `heartbeat-file` | `/tmp/sheremetevo-health` | Файл, куда раз в 2 с пишется состояние (возраст последнего кадра, сколько камер шлют кадры). Пусто — не писать. В Docker должен совпадать с `HEALTH_FILE` в `docker-compose.yml` |
+| `heartbeat-file` | `/tmp/geotracker-health` | Файл, куда раз в 2 с пишется состояние (возраст последнего кадра, сколько камер шлют кадры). Пусто — не писать. В Docker должен совпадать с `HEALTH_FILE` в `docker-compose.yml` |
 | `hang-timeout-sec` | `60` | Главный цикл не отвечает дольше — аварийный выход. `0` — не следить, ≥ 0 |
 | `no-frames-restart-sec` | `300` | Ни одного обработанного кадра со всех камер дольше — штатная остановка с кодом 1 для перезапуска. `0` — не перезапускать, ≥ 0 |
 
@@ -246,5 +246,5 @@ ffmpeg -re -stream_loop -1 -i video.mp4 -an \
 - `[logging] level=debug`, если нужна статистика по камере раз в 5 с.
 
 Координаты в сообщениях при этом смысла не имеют — смотрят на рамки и id треков в
-видеовыходе. Запуск: `./build/sheremetevo-app configs/app.test.ini`, в Docker —
+видеовыходе. Запуск: `./build/geotracker configs/app.test.ini`, в Docker —
 `APP_CONFIG=app.test.ini` в `.env`.

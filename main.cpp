@@ -169,7 +169,7 @@ int main(int argc, char *argv[]) {
     loop = g_main_loop_new(NULL, FALSE);
 
     // Elements initialization
-    pipeline = gst_pipeline_new("sheremetevo");
+    pipeline = gst_pipeline_new("geotracker");
 
     streammux = gst_element_factory_make("nvstreammux", "stream-muxer");
     pgie = gst_element_factory_make("nvinfer", "primary-infer");
@@ -264,7 +264,7 @@ int main(int argc, char *argv[]) {
     // Проба стоит после трекера, чтобы в сообщения попадали его object_id
     set_probe(analytics_tail, "src", pgie_src_pad_buffer_probe, &probe_data);
 
-    GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "sheremetevo");
+    GST_DEBUG_BIN_TO_DOT_FILE(GST_BIN(pipeline), GST_DEBUG_GRAPH_SHOW_ALL, "geotracker");
     bus = gst_pipeline_get_bus(GST_PIPELINE(pipeline));
     BusCallData data = { loop, pipeline, &sources, &outputs, FALSE };
     bus_watch_id = gst_bus_add_watch(bus, bus_call, &data);

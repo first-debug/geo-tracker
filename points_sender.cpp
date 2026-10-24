@@ -46,20 +46,20 @@ PointsSender::~PointsSender() {
 }
 
 void PointsSender::add_frame(const points_message_t &msg) {
-    sheremetevo::Frame frame;
+    geotracker::Frame frame;
     frame.set_camera_id(static_cast<uint32_t>(msg.camera_id));
     frame.set_timestamp(msg.timestamp);
     frame.mutable_detections()->Reserve(static_cast<int>(msg.future_size));
 
     for (size_t i = 0; i < msg.future_size; i++) {
         const future_t &f = msg.future[i];
-        sheremetevo::Detection *det = frame.add_detections();
+        geotracker::Detection *det = frame.add_detections();
         det->set_lat(f.lat);
         det->set_lng(f.lng);
         det->set_object_id(f.object_id);
         det->set_name(f.name ? f.name : "");
         det->set_confidence(static_cast<float>(f.confidence));
-        sheremetevo::BBox *bbox = det->mutable_bbox();
+        geotracker::BBox *bbox = det->mutable_bbox();
         bbox->set_x1(f.bbox.x1);
         bbox->set_y1(f.bbox.y1);
         bbox->set_x2(f.bbox.x2);
@@ -114,7 +114,7 @@ void PointsSender::run() {
             cv.wait(lock, [this] { return stopping || !pending.empty(); });
         }
 
-        std::vector<sheremetevo::Frame> frames;
+        std::vector<geotracker::Frame> frames;
         frames.swap(pending);
         size_t dropped = std::exchange(dropped_frames, 0);
         bool stop_now = stopping;
@@ -136,11 +136,11 @@ void PointsSender::run() {
     }
 }
 
-void PointsSender::flush(std::vector<sheremetevo::Frame> &frames) {
-    sheremetevo::Batch batch;
+void PointsSender::flush(std::vector<geotracker::Frame> &frames) {
+    geotracker::Batch batch;
     size_t batch_size = kBatchHeaderMax;
 
-    for (sheremetevo::Frame &frame : frames) {
+    for (geotracker::Frame &frame : frames) {
         size_t entry = field_size(frame.ByteSizeLong());
         if (batch_size + entry <= max_datagram_bytes) {
             *batch.add_frames() = std::move(frame);
@@ -159,13 +159,13 @@ void PointsSender::flush(std::vector<sheremetevo::Frame> &frames) {
 
         // Кадр не помещается даже в пустую датаграмму: делим его объекты
         // на несколько Frame с теми же camera_id и timestamp.
-        sheremetevo::Frame part;
+        geotracker::Frame part;
         part.set_camera_id(frame.camera_id());
         part.set_timestamp(frame.timestamp());
         const size_t part_base = part.ByteSizeLong();
         size_t part_size = part_base;
 
-        for (sheremetevo::Detection &det : *frame.mutable_detections()) {
+        for (geotracker::Detection &det : *frame.mutable_detections()) {
             size_t det_entry = field_size(det.ByteSizeLong());
             if (kBatchHeaderMax + field_size(part_size + det_entry) > max_datagram_bytes &&
                     part.detections_size() > 0) {
@@ -193,7 +193,7 @@ void PointsSender::flush(std::vector<sheremetevo::Frame> &frames) {
     }
 }
 
-void PointsSender::send_batch(sheremetevo::Batch &batch) {
+void PointsSender::send_batch(geotracker::Batch &batch) {
     batch.set_sequence(sequence++);
     batch.set_sent_at(realtime_sec());
 

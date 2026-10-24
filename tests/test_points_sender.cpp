@@ -76,10 +76,10 @@ private:
     std::thread worker;
 };
 
-std::vector<sheremetevo::Batch> parse_all(const std::vector<std::string> &datagrams) {
-    std::vector<sheremetevo::Batch> batches;
+std::vector<geotracker::Batch> parse_all(const std::vector<std::string> &datagrams) {
+    std::vector<geotracker::Batch> batches;
     for (const std::string &d : datagrams) {
-        sheremetevo::Batch b;
+        geotracker::Batch b;
         if (!b.ParseFromString(d)) {
             test::fail(__FILE__, __LINE__, "datagram is not a valid Batch");
         }
@@ -122,7 +122,7 @@ struct TestFrame {
     }
 };
 
-void check_sequences(const std::vector<sheremetevo::Batch> &batches) {
+void check_sequences(const std::vector<geotracker::Batch> &batches) {
     for (size_t i = 0; i < batches.size(); i++) {
         CHECK_EQ(batches[i].sequence(), uint64_t(i));
     }
@@ -163,18 +163,18 @@ TEST("points_sender: frame fields are mapped to protobuf") {
 
     auto batches = parse_all(rx.wait_all());
     REQUIRE_EQ(batches.size(), size_t(1));
-    const sheremetevo::Batch &b = batches[0];
+    const geotracker::Batch &b = batches[0];
     CHECK_EQ(b.sequence(), uint64_t(0));
     CHECK_LE(before, b.sent_at());
     CHECK_LE(b.sent_at(), after);
 
     REQUIRE_EQ(b.frames_size(), 1);
-    const sheremetevo::Frame &f = b.frames(0);
+    const geotracker::Frame &f = b.frames(0);
     CHECK_EQ(f.camera_id(), 3u);
     CHECK_NEAR(f.timestamp(), 1761057083.125, 1e-9);
     REQUIRE_EQ(f.detections_size(), 2);
 
-    const sheremetevo::Detection &d0 = f.detections(0);
+    const geotracker::Detection &d0 = f.detections(0);
     CHECK_NEAR(d0.lat(), 55.9805123456789, 1e-13);
     CHECK_NEAR(d0.lng(), 37.4146987654321, 1e-13);
     CHECK_EQ(d0.object_id(), int64_t(-1));
@@ -185,7 +185,7 @@ TEST("points_sender: frame fields are mapped to protobuf") {
     CHECK_EQ(d0.bbox().x2(), 300);
     CHECK_EQ(d0.bbox().y2(), 140);
 
-    const sheremetevo::Detection &d1 = f.detections(1);
+    const geotracker::Detection &d1 = f.detections(1);
     CHECK_EQ(d1.object_id(), int64_t(1234567890123LL));
     CHECK_EQ(d1.name(), std::string(""));
     CHECK_EQ(d1.bbox().x1(), -5);
@@ -268,7 +268,7 @@ TEST("points_sender: large frame is split by objects across datagrams") {
     check_sequences(batches);
 
     // порядок: маленький кадр, части большого, маленький кадр
-    std::vector<const sheremetevo::Frame *> frames;
+    std::vector<const geotracker::Frame *> frames;
     for (const auto &b : batches) {
         for (const auto &f : b.frames()) {
             frames.push_back(&f);

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Запуск sheremetevo-app в контейнере: проверяет смонтированные конфиги и
+# Запуск geotracker в контейнере: проверяет смонтированные конфиги и
 # модель, чтобы ошибка была понятна сразу, а не из глубины DeepStream, и
 # заранее строит TensorRT engine (tools/build_engine.sh).
 set -euo pipefail
@@ -54,4 +54,4 @@ rm -rf "${HOME:-/root}/.cache/gstreamer-1.0"
 # DeepStream-Yolo сохранит его в текущую папку: пусть это будет models/.
 cd "${MODELS_DIR}"
 
-exec /app/sheremetevo-app "${CONFIG}"
+exec /app/geotracker "${CONFIG}"

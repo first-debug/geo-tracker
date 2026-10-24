@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Принимает UDP-датаграммы sheremetevo-app и печатает их содержимое.
+"""Принимает UDP-датаграммы geotracker и печатает их содержимое.
 
 Нужны пакет protobuf (pip install protobuf) и модуль points_pb2,
 сгенерированный из proto/points.proto:

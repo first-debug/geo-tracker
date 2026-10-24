@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 #
-# Образ sheremetevo-app. Сборка из корня репозитория:
+# Образ geotracker. Сборка из корня репозитория:
 #   docker compose build
 # или
-#   docker build -f docker/Dockerfile -t sheremetevo-app .
+#   docker build -f docker/Dockerfile -t geotracker .
 #
 # Обе стадии строятся на одном образе DeepStream: в итоговый образ не попадают
 # компиляторы и -dev пакеты, а библиотеки DeepStream/TensorRT/CUDA совпадают
@@ -52,7 +52,7 @@ RUN make clean && make -j"$(nproc)"
 # Список системных пакетов, которые нужны собранным файлам во время работы
 COPY docker/runtime-deps.sh /usr/local/bin/runtime-deps.sh
 RUN bash /usr/local/bin/runtime-deps.sh \
-        build/sheremetevo-app \
+        build/geotracker \
         /opt/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so \
         > /runtime-packages.txt \
     && echo "Runtime packages:" && cat /runtime-packages.txt
@@ -64,7 +64,7 @@ FROM ${DS_IMAGE} AS runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG GIT_SHA=unknown
-LABEL org.opencontainers.image.title="sheremetevo-app" \
+LABEL org.opencontainers.image.title="geotracker" \
       org.opencontainers.image.revision="${GIT_SHA}"
 
 # rtspsrc, rtph264depay — plugins-good; h264parse — plugins-bad;
@@ -79,7 +79,7 @@ RUN apt-get update \
 
 COPY --from=build /opt/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so \
                   /opt/DeepStream-Yolo/nvdsinfer_custom_impl_Yolo/libnvdsinfer_custom_impl_Yolo.so
-COPY --from=build /src/build/sheremetevo-app /app/sheremetevo-app
+COPY --from=build /src/build/geotracker /app/geotracker
 COPY docker/entrypoint.sh /app/entrypoint.sh
 COPY docker/healthcheck.sh /app/healthcheck.sh
 COPY tools/build_engine.sh /app/build_engine.sh
@@ -89,7 +89,7 @@ RUN chmod +x /app/entrypoint.sh /app/healthcheck.sh /app/build_engine.sh
 # и нужные элементы GStreamer есть. gst-inspect при этом создаёт кэш реестра
 # плагинов, в котором плагины DeepStream без GPU помечены как не загрузившиеся;
 # такой кэш нельзя оставлять в образе, иначе nvinfer и nvstreammux не найдутся.
-RUN missing="$(ldd /app/sheremetevo-app | grep 'not found' | grep -v 'libcuda.so' || true)" \
+RUN missing="$(ldd /app/geotracker | grep 'not found' | grep -v 'libcuda.so' || true)" \
     && if [ -n "${missing}" ]; then echo "Missing libraries:"; echo "${missing}"; exit 1; fi \
     && for el in rtspsrc rtph264depay h264parse rtspclientsink; do \
            gst-inspect-1.0 "${el}" > /dev/null || { echo "GStreamer element ${el} not found"; exit 1; }; \

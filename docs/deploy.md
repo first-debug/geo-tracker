@@ -34,8 +34,8 @@
 На сервере нужна копия репозитория с заполненными `configs/` и `models/`:
 
 ```
-git clone <адрес репозитория> sheremetevo
-cd sheremetevo
+git clone <адрес репозитория> geotracker
+cd geotracker
 cp .env.example .env
 ```
 
@@ -82,7 +82,7 @@ RTSP-сессии и энкодеры и завершается; на это о�
 
 ## Контроль работоспособности
 
-Приложение раз в 2 секунды пишет heartbeat-файл `/tmp/sheremetevo-health`
+Приложение раз в 2 секунды пишет heartbeat-файл `/tmp/geotracker-health`
 внутри контейнера:
 
 ```
@@ -102,7 +102,7 @@ cameras_receiving=4/4
 
 ```
 docker compose ps                     # STATUS: healthy / unhealthy
-docker inspect --format '{{json .State.Health}}' sheremetevo-app-1
+docker inspect --format '{{json .State.Health}}' geotracker-1
 ```
 
 Docker сам не перезапускает контейнер со статусом `unhealthy`, поэтому
@@ -110,7 +110,7 @@ Docker сам не перезапускает контейнер со стату
 
 | Ключ | По умолчанию | Что происходит |
 | :--- | :--- | :--- |
-| `heartbeat-file` | `/tmp/sheremetevo-health` | Куда писать heartbeat; пусто — не писать. Должен совпадать с `HEALTH_FILE` в `docker-compose.yml`. |
+| `heartbeat-file` | `/tmp/geotracker-health` | Куда писать heartbeat; пусто — не писать. Должен совпадать с `HEALTH_FILE` в `docker-compose.yml`. |
 | `hang-timeout-sec` | `60` | Главный цикл не отвечает дольше (зависание) — процесс завершается с ошибкой, Docker перезапускает контейнер. `0` — не следить. |
 | `no-frames-restart-sec` | `300` | Ни одного обработанного кадра со всех камер дольше — штатная остановка с кодом 1 и перезапуск. Помогает, если завис конвейер; если же недоступны сами камеры, приложение будет перезапускаться с этим интервалом. `0` — не перезапускать. |
 
@@ -158,7 +158,7 @@ export APP_VERSION=$(git rev-parse --short HEAD) GIT_SHA=$(git rev-parse HEAD)
 docker compose up -d --build
 ```
 
-Старые образы остаются в Docker (`docker images sheremetevo-app`).
+Старые образы остаются в Docker (`docker images geotracker`).
 Откат на предыдущую версию без пересборки:
 
 ```

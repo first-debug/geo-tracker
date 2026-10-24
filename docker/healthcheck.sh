@@ -4,7 +4,7 @@
 # камеры. Файл пишет приложение, см. секцию [health] в app.ini.
 set -u
 
-HEALTH_FILE="${HEALTH_FILE:-/tmp/sheremetevo-health}"
+HEALTH_FILE="${HEALTH_FILE:-/tmp/geotracker-health}"
 # heartbeat пишется раз в 2 с
 MAX_HEARTBEAT_AGE_SEC="${HEALTH_MAX_HEARTBEAT_AGE_SEC:-15}"
 MAX_FRAME_AGE_SEC="${HEALTH_MAX_FRAME_AGE_SEC:-60}"

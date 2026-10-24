@@ -18,7 +18,7 @@ namespace {
 class TempDir {
 public:
     TempDir() {
-        char tmpl[] = "/tmp/sheremetevo-test-XXXXXX";
+        char tmpl[] = "/tmp/geotracker-test-XXXXXX";
         path = mkdtemp(tmpl);
     }
     ~TempDir() {
@@ -109,7 +109,7 @@ TEST("app_config: minimal config gets defaults for optional sections") {
     // [rtsp], [health], [geo], [tracker] не заданы
     CHECK_EQ(c.stall_timeout_sec, 10);
     CHECK_EQ(c.reconnect_interval_sec, 5);
-    CHECK_EQ(c.heartbeat_file, std::string("/tmp/sheremetevo-health"));
+    CHECK_EQ(c.heartbeat_file, std::string("/tmp/geotracker-health"));
     CHECK_EQ(c.hang_timeout_sec, 60);
     CHECK_EQ(c.no_frames_restart_sec, 300);
     CHECK_NEAR(c.ransac_threshold_m, 10.0, 1e-12);
@@ -151,9 +151,9 @@ TEST("app_config: [geo] zone is resolved from the config folder") {
     std::string dir = r.path.substr(0, r.path.rfind('/'));
     CHECK_EQ(r.config.zone_file, dir + "/zones/apron.csv");
 
-    Loaded abs = load(kMinimal + "[geo]\nzone=/etc/sheremetevo/zone.csv\n");
+    Loaded abs = load(kMinimal + "[geo]\nzone=/etc/geotracker/zone.csv\n");
     REQUIRE(abs.ok);
-    CHECK_EQ(abs.config.zone_file, std::string("/etc/sheremetevo/zone.csv"));
+    CHECK_EQ(abs.config.zone_file, std::string("/etc/geotracker/zone.csv"));
 }
 
 TEST("app_config: camera zone overrides [geo] zone, empty value disables it") {

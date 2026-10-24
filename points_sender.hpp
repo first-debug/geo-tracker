@@ -44,8 +44,8 @@ public:
 
 private:
     void run();
-    void flush(std::vector<sheremetevo::Frame> &frames);
-    void send_batch(sheremetevo::Batch &batch);
+    void flush(std::vector<geotracker::Frame> &frames);
+    void send_batch(geotracker::Batch &batch);
 
     UdpConnection &udp_conn;
     const int interval_ms;
@@ -53,7 +53,7 @@ private:
 
     std::mutex mutex;
     std::condition_variable cv;
-    std::vector<sheremetevo::Frame> pending;
+    std::vector<geotracker::Frame> pending;
     bool stopping = false;
     // кадры, отброшенные из-за переполнения очереди (поток отправки не успевает)
     size_t dropped_frames = 0;

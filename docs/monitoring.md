@@ -91,7 +91,7 @@ docker compose logs --no-log-prefix app | jq -c 'select(.component == "CAMERA")'
 | `info` | `[OUTPUT] camera=N video output restored after S s down, K restart(s)` | Видеовыход проработал 30 с без ошибок |
 
 Если позже понадобятся оповещения (Telegram, почта), их удобнее строить на метриках
-(`sheremetevo_camera_up`, см. ниже) или на записях `[CAMERA] ... camera lost` в
+(`geotracker_camera_up`, см. ниже) или на записях `[CAMERA] ... camera lost` в
 системе сбора логов, приложение для этого менять не нужно.
 
 ### Файл журнала
@@ -116,18 +116,18 @@ port=9464
 
 | Метрика | Тип | Описание |
 | :--- | :--- | :--- |
-| `sheremetevo_uptime_seconds` | gauge | Время работы приложения |
-| `sheremetevo_camera_up{camera}` | gauge | `1` — от камеры идут кадры (последний не старше `stall-timeout-sec`), `0` — нет |
-| `sheremetevo_camera_down_seconds{camera}` | gauge | Длительность текущего простоя камеры, `0`, если работает |
-| `sheremetevo_camera_last_frame_age_seconds{camera}` | gauge | Сколько секунд назад пришёл последний кадр, `-1` — кадров ещё не было |
-| `sheremetevo_camera_restarts_total{camera}` | counter | Перезапуски камеры после ошибки или зависания |
-| `sheremetevo_camera_fps{camera}` | gauge | fps на выходе анализа за последние 5 с (то же, что в `[STATS]` на уровне `debug`) |
-| `sheremetevo_camera_frames_total{camera}` | counter | Обработанные кадры |
-| `sheremetevo_camera_objects_total{camera}` | counter | Найденные объекты |
-| `sheremetevo_camera_latency_seconds_sum{camera}`, `_count` | summary | Задержка обработки: от прихода кадра в `nvstreammux` до выхода из детектора/трекера |
-| `sheremetevo_udp_datagrams_sent_total` | counter | Отправленные датаграммы с точками |
-| `sheremetevo_udp_send_errors_total` | counter | Ошибки отправки |
-| `sheremetevo_udp_frames_dropped_total` | counter | Кадры, отброшенные из-за переполнения очереди отправки |
+| `geotracker_uptime_seconds` | gauge | Время работы приложения |
+| `geotracker_camera_up{camera}` | gauge | `1` — от камеры идут кадры (последний не старше `stall-timeout-sec`), `0` — нет |
+| `geotracker_camera_down_seconds{camera}` | gauge | Длительность текущего простоя камеры, `0`, если работает |
+| `geotracker_camera_last_frame_age_seconds{camera}` | gauge | Сколько секунд назад пришёл последний кадр, `-1` — кадров ещё не было |
+| `geotracker_camera_restarts_total{camera}` | counter | Перезапуски камеры после ошибки или зависания |
+| `geotracker_camera_fps{camera}` | gauge | fps на выходе анализа за последние 5 с (то же, что в `[STATS]` на уровне `debug`) |
+| `geotracker_camera_frames_total{camera}` | counter | Обработанные кадры |
+| `geotracker_camera_objects_total{camera}` | counter | Найденные объекты |
+| `geotracker_camera_latency_seconds_sum{camera}`, `_count` | summary | Задержка обработки: от прихода кадра в `nvstreammux` до выхода из детектора/трекера |
+| `geotracker_udp_datagrams_sent_total` | counter | Отправленные датаграммы с точками |
+| `geotracker_udp_send_errors_total` | counter | Ошибки отправки |
+| `geotracker_udp_frames_dropped_total` | counter | Кадры, отброшенные из-за переполнения очереди отправки |
 
 Задержка считается по `ntp_timestamp` кадра, который `nvstreammux` по умолчанию
 ставит по системным часам в момент прихода кадра. Сеть от камеры до сервера и
@@ -137,13 +137,13 @@ port=9464
 
 ```
 # камеры, которые сейчас не работают
-sheremetevo_camera_up == 0
+geotracker_camera_up == 0
 # средняя задержка обработки за 5 минут, секунды
-rate(sheremetevo_camera_latency_seconds_sum[5m]) / rate(sheremetevo_camera_latency_seconds_count[5m])
+rate(geotracker_camera_latency_seconds_sum[5m]) / rate(geotracker_camera_latency_seconds_count[5m])
 # fps по счётчику кадров
-rate(sheremetevo_camera_frames_total[1m])
+rate(geotracker_camera_frames_total[1m])
 # перезапуски камер за час
-increase(sheremetevo_camera_restarts_total[1h])
+increase(geotracker_camera_restarts_total[1h])
 ```
 
 ### Если появится Prometheus
@@ -152,7 +152,7 @@ increase(sheremetevo_camera_restarts_total[1h])
 
 ```yaml
 scrape_configs:
-  - job_name: sheremetevo
+  - job_name: geotracker
     scrape_interval: 15s
     static_configs:
       - targets: ["<сервер>:9464"]
@@ -162,16 +162,16 @@ scrape_configs:
 
 ```yaml
 groups:
-  - name: sheremetevo
+  - name: geotracker
     rules:
       - alert: CameraDown
-        expr: sheremetevo_camera_up == 0
+        expr: geotracker_camera_up == 0
         for: 1m
         annotations:
           summary: "Камера {{ $labels.camera }} не присылает кадры"
       - alert: AppDown
-        expr: up{job="sheremetevo"} == 0
+        expr: up{job="geotracker"} == 0
         for: 2m
       - alert: UdpSendErrors
-        expr: increase(sheremetevo_udp_send_errors_total[5m]) > 0
+        expr: increase(geotracker_udp_send_errors_total[5m]) > 0
 ```

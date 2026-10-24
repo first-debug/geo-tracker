@@ -1,4 +1,4 @@
-# Сборка sheremetevo. Список целей: make help
+# Сборка geotracker. Список целей: make help
 #
 # Приложение собирается только в DeepStream-контейнере (docs/deploy.md).
 # Юнит-тесты (make test) не требуют DeepStream, GStreamer и GPU.
@@ -20,7 +20,7 @@ GEN_DIR:= $(BUILD_DIR)/gen
 TEST_DIR:= $(BUILD_DIR)/tests
 GRAPHS_DIR:= graphs
 
-TARGET:= $(BUILD_DIR)/sheremetevo-app
+TARGET:= $(BUILD_DIR)/geotracker
 TEST_BIN:= $(TEST_DIR)/run-tests
 
 COMMON_CXXFLAGS:= -std=gnu++17 -g -Wall -Wextra -MMD -MP -I$(GEN_DIR)
@@ -160,7 +160,7 @@ gen-graph: $(TARGET) | $(GRAPHS_DIR)
 	GST_DEBUG_DUMP_DOT_DIR=$(GRAPHS_DIR) $(TARGET) $(RUN_CONFIG)
 
 graph:
-	dot -Tpng $(GRAPHS_DIR)/sheremetevo.dot -o $(GRAPHS_DIR)/sheremetevo.png
+	dot -Tpng $(GRAPHS_DIR)/geotracker.dot -o $(GRAPHS_DIR)/geotracker.png
 
 ########################################################################
 
@@ -174,8 +174,8 @@ help:
 	@echo "make engine                 построить TensorRT engine, если нужно"
 	@echo "make engine-rebuild         построить engine заново"
 	@echo "make gen-graph              запустить приложение с выгрузкой графа в $(GRAPHS_DIR)/"
-	@echo "make graph                  нарисовать $(GRAPHS_DIR)/sheremetevo.png"
-	@echo "make clean                  удалить $(BUILD_DIR)/ и $(GRAPHS_DIR)/"
+	@echo "make graph                  нарисовать $(GRAPHS_DIR)/geotracker.png"
+	@echo "make clean                  удалить $(BUILD_DIR)/, $(GRAPHS_DIR)/ и "
 
 .PHONY: all run test engine engine-rebuild gen-graph graph clean help \
         check-deepstream FORCE

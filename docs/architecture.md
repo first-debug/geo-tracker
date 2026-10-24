@@ -1,6 +1,6 @@
 # Архитектура
 
-Приложение `sheremetevo-app` — один процесс на C++17, построенный на GStreamer и
+Приложение `geotracker` — один процесс на C++17, построенный на GStreamer и
 NVIDIA DeepStream 9.0. Всё декодирование, масштабирование, детекция и трекинг идут
 на GPU, на CPU остаются перевод пикселей в координаты и отправка по UDP
 (в отдельном потоке).
@@ -50,7 +50,7 @@ rtspsrc ─► rtph264depay ─► nvv4l2decoder ─► [nvvideoconvert flip-met
 
 Граф реального конвейера можно получить командой `make gen-graph` (запускает
 приложение с `GST_DEBUG_DUMP_DOT_DIR=graphs`, после остановки появится
-`graphs/sheremetevo.dot`) и `make graph` (рисует `graphs/sheremetevo.png`, нужен graphviz).
+`graphs/geotracker.dot`) и `make graph` (рисует `graphs/geotracker.png`, нужен graphviz).
 
 ## Обработка кадра
 

@@ -1,4 +1,3 @@
-# Шаблон конфигурации sheremetevo-app.
 # Скопируйте в configs/app.ini и подставьте свои адреса; app.ini в git не хранится.
 # Относительные пути считаются от папки, где лежит этот файл.
 
@@ -22,7 +21,7 @@ reconnect-interval-sec=5
 [health]
 # heartbeat-файл раз в 2 с: время, возраст последнего кадра, сколько камер шлют
 # кадры; по нему Docker HEALTHCHECK решает, здоров ли контейнер. Пустое — не писать
-heartbeat-file=/tmp/sheremetevo-health
+heartbeat-file=/tmp/geotracker-health
 # главный цикл не отвечает дольше — аварийный выход (Docker перезапустит); 0 — не следить
 hang-timeout-sec=60
 # ни одного обработанного кадра ни с одной камеры дольше — штатная остановка
@@ -38,7 +37,7 @@ level=info
 format=text
 # файл журнала в дополнение к stdout/stderr, папка должна существовать;
 # не задан или пустой — не писать (в Docker логи и так собирает Docker)
-#file=/var/log/sheremetevo/app.log
+file=/var/log/geotracker/app.log
 # ротация: при превышении размера app.log -> app.log.1 -> ... -> app.log.<max-files>;
 # max-size-mb=0 — без ротации
 max-size-mb=50
