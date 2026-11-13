@@ -24,6 +24,7 @@ struct AppConfig {
     std::string nvinfer_config;
     // класс детектора, объекты которого отправляются (4 — airplane в COCO), -1 — любой
     int class_id = 4;
+    double confidence = 0.6;
 
     // размер кадров в пачке nvstreammux (и выхода nvdewarper, если он включён)
     int frame_width = 1728;

@@ -19,7 +19,7 @@ void draw_rejected_object(NvOSD_RectParams* bounding_box, NvOSD_TextParams* text
 void draw_rejected_object(NvOSD_RectParams* bounding_box, NvOSD_TextParams* text_params) {
     bounding_box->border_width = 1;
     bounding_box->has_bg_color = 0;
-    bounding_box->border_color = {0.6, 0.6, 0.6, 0.8};
+    bounding_box->border_color = {1, 0, 0, 0.8};
 
     // подпись nvinfer (имя класса) убираем, чтобы не путать с отправленными объектами
     g_free(text_params->display_text);
@@ -134,7 +134,8 @@ GstPadProbeReturn pgie_src_pad_buffer_probe(GstPad *,
             // точка — середина нижней стороны bbox, она должна быть ниже горизонта
             // и внутри зоны камеры. Отсеянные объекты рисуются серым и не отправляются.
             bool accepted = (prob_data->class_id < 0 || obj_meta->class_id == prob_data->class_id) &&
-                    rect.height > 0 && rect.width / rect.height > prob_data->min_aspect_ratio;
+                    rect.height > 0 && rect.width / rect.height > prob_data->min_aspect_ratio &&
+                    obj_meta->confidence >= prob_data->min_confidence;
 
             // (lng, lat)
             std::optional<std::pair<double, double>> geo_coords;
